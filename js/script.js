@@ -2,6 +2,17 @@ let watchId = null;
 let myLocationMarker = null;
 let lastLocation = null;
 let lastTimestamp = null;
+let currentTrackPoints = []; // Масив для точок поточного треку
+let trackLayer = null;      // Шар на карті для малювання
+let shapes = JSON.parse(localStorage.getItem('savedShapes')) || [];
+let activeShapeId = localStorage.getItem('activeShapeId') || null;
+let markers = [];
+let leafletPolygons = {}; // Об'єкт для зберігання малюнків полігонів
+let isTrackingActive = false; // Прапорець для запису треку та руху камери
+let sessionProgress = {};
+
+const colorPicker = document.getElementById('colorPicker');
+
 
 // Константи шарів (карта та супутник)
 // 1. Звичайна карта (OpenStreetMap)
@@ -52,12 +63,7 @@ function toggleMapLayer() {
 
 
 
-let shapes = JSON.parse(localStorage.getItem('savedShapes')) || [];
-let activeShapeId = localStorage.getItem('activeShapeId') || null;
-let markers = [];
-let leafletPolygons = {}; // Об'єкт для зберігання малюнків полігонів
 
-const colorPicker = document.getElementById('colorPicker');
 
 // Ініціалізація при завантаженні
 function init() {
@@ -70,6 +76,14 @@ function init() {
     }
     renderShapes();
     updateUI();
+    if (activeShapeId) {
+        // Переконуємося, що активне поле існує в масиві
+        const activeShape = shapes.find(s => s.id === activeShapeId);
+        if (activeShape) {
+            renderTrack();
+        }
+    }
+    startGlobalGPS();
 }
 
 function createNewShape() {
@@ -183,6 +197,7 @@ function renderShapes() {
                 updateCompletedStats();
             }
             showEditView(shape);
+            renderTrack();
             focusOnShape();
         };
         container.appendChild(btn);
@@ -447,6 +462,7 @@ function updateUI() {
             if (lockBtn) lockBtn.innerText = shape.isLocked ? "🔒" : "🔓";
         }
     });
+    renderTrack(); 
 }
 
 
@@ -510,18 +526,22 @@ function calculateArea(shape) {
 
 
 function saveData() {
-    // Зберігаємо всі площі разом з їхніми лініями та станом блокування
-    localStorage.setItem('savedShapes', JSON.stringify(shapes));
-    localStorage.setItem('activeShapeId', activeShapeId);
+    try {
+        localStorage.setItem('savedShapes', JSON.stringify(shapes));
+        localStorage.setItem('activeShapeId', activeShapeId);
 
-    // Зберігаємо стан карти
-    const center = map.getCenter();
-    localStorage.setItem('mapLat', center.lat);
-    localStorage.setItem('mapLng', center.lng);
-    localStorage.setItem('mapZoom', map.getZoom());
+        const center = map.getCenter();
+        localStorage.setItem('mapLat', center.lat);
+        localStorage.setItem('mapLng', center.lng);
+        localStorage.setItem('mapZoom', map.getZoom());
 
-    console.log("Дані успішно збережено в пам'ять.");
+        console.log("Дані успішно збережено.");
+    } catch (e) {
+        console.error("Помилка збереження: можливо, вичерпано ліміт пам'яті (LocalStorage)", e);
+        alert("Пам'ять переповнена! Спробуйте видалити старі треки.");
+    }
 }
+
 
 function deleteShape(id) {
     // 1. Видаляємо поле з масиву
@@ -706,103 +726,41 @@ function generateLines() {
 
 function toggleLiveTracking() {
     const trackBtn = document.getElementById('trackBtn');
-    const speedElem = document.getElementById('speedometer');
-    const speedValue = document.getElementById('speedValue');
+    isTrackingActive = !isTrackingActive; // Перемикаємо режим
 
-    if (watchId !== null) {
-        // --- ВИМИКАЄМО СТЕЖЕННЯ ---
-        navigator.geolocation.clearWatch(watchId);
-        watchId = null;
-        lastLocation = null;
-        lastTimestamp = null;
-
-        if (myLocationMarker) {
-            map.removeLayer(myLocationMarker);
-            myLocationMarker = null;
-        }
-
+    if (isTrackingActive) {
+        trackBtn.classList.add('active');
+        trackBtn.innerText = "🛰️";
+        if (lastLocation) map.panTo([lastLocation.lat, lastLocation.lng]);
+    } else {
         trackBtn.classList.remove('active');
         trackBtn.innerText = "📍";
-        if (speedValue) speedValue.innerText = "0.0";
-        return;
     }
-
-    if (!navigator.geolocation) {
-        alert("Ваш браузер не підтримує геолокацію");
-        return;
-    }
-
-    // --- ВМИКАЄМО СТЕЖЕННЯ ---
-    trackBtn.classList.add('active');
-    trackBtn.innerText = "🛰️";
-
-    watchId = navigator.geolocation.watchPosition(
-        (position) => {
-            const { latitude: lat, longitude: lng, accuracy, heading, speed } = position.coords;
-            const currentTimestamp = position.timestamp;
-
-            // 1. РОЗРАХУНОК ШВИДКОСТІ (системна або ручна)
-            let calculatedSpeed = speed;
-
-            if ((calculatedSpeed === null || calculatedSpeed === 0) && lastLocation && lastTimestamp) {
-                const start = turf.point([lastLocation.lng, lastLocation.lat]);
-                const end = turf.point([lng, lat]);
-                const distance = turf.distance(start, end, { units: 'kilometers' });
-                const timeHours = (currentTimestamp - lastTimestamp) / (1000 * 60 * 60);
-                if (timeHours > 0) calculatedSpeed = (distance / timeHours) / 3.6; // м/с
-            }
-
-            if (speedValue) {
-                const kmh = calculatedSpeed ? (calculatedSpeed * 3.6).toFixed(1) : "0.0";
-                speedValue.innerText = kmh;
-            }
-
-            // 2. РОЗРАХУНОК КУТА ПОВОРОТУ (heading)
-            let rotation = 0;
-            if (heading !== null && heading !== undefined) {
-                rotation = heading;
-            } else if (lastLocation) {
-                const start = turf.point([lastLocation.lng, lastLocation.lat]);
-                const end = turf.point([lng, lat]);
-                rotation = turf.bearing(start, end);
-            }
-
-            // 3. ОНОВЛЕННЯ МАРКЕРА НА КАРТІ
-            if (myLocationMarker) map.removeLayer(myLocationMarker);
-            myLocationMarker = L.layerGroup();
-
-            // Ореол точності
-            L.circle([lat, lng], { radius: accuracy, weight: 1, color: '#3498db', fillOpacity: 0.1 }).addTo(myLocationMarker);
-
-            // Стрілка-маркер
-            const arrowIcon = L.divIcon({
-                className: 'location-arrow',
-                html: `<div class="arrow-icon" style="transform: rotate(${rotation}deg)"></div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
-            });
-
-            L.marker([lat, lng], { icon: arrowIcon }).addTo(myLocationMarker);
-            myLocationMarker.addTo(map);
-
-            // Зберігаємо дані для наступного кроку
-            lastLocation = { lat, lng };
-            lastTimestamp = currentTimestamp;
-
-            // Центруємо камеру
-            map.panTo([lat, lng]);
-        },
-        (error) => {
-            console.warn("Помилка геолокації: " + error.message);
-        },
-        {
-            enableHighAccuracy: true,
-            maximumAge: 1000,
-            timeout: 10000
-        }
-    );
 }
 
+
+function renderTrack() {
+    // 1. Очищуємо старий трек з карти
+    if (trackLayer) {
+        map.removeLayer(trackLayer);
+        trackLayer = null;
+    }
+
+    // 2. Шукаємо активне поле
+    const activeShape = shapes.find(s => s.id === activeShapeId);
+
+    // 3. Малюємо, якщо є точки
+    if (activeShape && activeShape.trackPoints && activeShape.trackPoints.length > 1) {
+        trackLayer = L.polyline(activeShape.trackPoints, {
+            color: '#d3a31f',      // ВАШ НОВИЙ КОЛІР
+            weight: getTrackWeight(),
+            opacity: 0.6,          // Трохи збільшив прозорість для кращої видимості
+            lineCap: 'round',
+            lineJoin: 'round',
+            interactive: false
+        }).addTo(map);
+    }
+}
 
 
 
@@ -900,4 +858,160 @@ function importData(event) {
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
     sidebar.classList.toggle('hidden');
+}
+
+function clearTrack() {
+    const activeShape = shapes.find(s => s.id === activeShapeId);
+    if (activeShape && confirm("Видалити намальований шлях для цього поля?")) {
+        activeShape.trackPoints = [];
+        if (trackLayer) map.removeLayer(trackLayer);
+        trackLayer = null;
+        saveData();
+        alert("Трек очищено");
+    }
+}
+
+function getTrackWeight() {
+    const spacing = parseFloat(document.getElementById('lineSpacing').value) || 10;
+    // Розрахунок: скільки пікселів займає 1 метр при поточному зумі
+    const centerLatLng = map.getCenter();
+    const pointC = map.latLngToContainerPoint(centerLatLng);
+    const pointDest = map.unproject(map.project(centerLatLng).add([0, 100])); // 100 пікселів вниз
+    const distanceInMeters = centerLatLng.distanceTo(pointDest);
+    const pixelsPerMeter = 100 / distanceInMeters;
+
+    return spacing * pixelsPerMeter;
+}
+
+map.on('zoomend', () => {
+    if (trackLayer) {
+        trackLayer.setStyle({ weight: getTrackWeight() });
+    }
+});
+
+function startGlobalGPS() {
+    if (!navigator.geolocation) return;
+
+    watchId = navigator.geolocation.watchPosition(
+        (position) => {
+            const { latitude: lat, longitude: lng, accuracy, heading, speed } = position.coords;
+            const currentTimestamp = position.timestamp;
+            const speedValue = document.getElementById('speedValue');
+
+            // 1. ОНОВЛЕННЯ СПІДОМЕТРА (завжди)
+            let calculatedSpeed = speed;
+            if ((calculatedSpeed === null || calculatedSpeed === 0) && lastLocation && lastTimestamp) {
+                const start = turf.point([lastLocation.lng, lastLocation.lat]);
+                const end = turf.point([lng, lat]);
+                const distance = turf.distance(start, end, { units: 'kilometers' });
+                const timeHours = (currentTimestamp - lastTimestamp) / (1000 * 60 * 60);
+                if (timeHours > 0) calculatedSpeed = (distance / timeHours) / 3.6;
+            }
+            if (speedValue) {
+                speedValue.innerText = calculatedSpeed ? (calculatedSpeed * 3.6).toFixed(1) : "0.0";
+            }
+
+            // 2. ОНОВЛЕННЯ МАРКЕРА (завжди)
+            let rotation = 0;
+            if (heading !== null && heading !== undefined) {
+                rotation = heading;
+            } else if (lastLocation) {
+                rotation = turf.bearing(turf.point([lastLocation.lng, lastLocation.lat]), turf.point([lng, lat]));
+            }
+
+            if (myLocationMarker) map.removeLayer(myLocationMarker);
+            myLocationMarker = L.layerGroup().addTo(map);
+            L.circle([lat, lng], { radius: accuracy, weight: 1, color: '#3498db', fillOpacity: 0.1 }).addTo(myLocationMarker);
+            const arrowIcon = L.divIcon({
+                className: 'location-arrow',
+                html: `<div class="arrow-icon" style="transform: rotate(${rotation}deg)"></div>`,
+                iconSize: [20, 20],
+                iconAnchor: [10, 10]
+            });
+            L.marker([lat, lng], { icon: arrowIcon }).addTo(myLocationMarker);
+
+            // 3. ЗАПИС ТРЕКУ ТА КАМЕРА (тільки якщо натиснуто "Стежити")
+            if (isTrackingActive) {
+                const activeShape = shapes.find(s => s.id === activeShapeId);
+                if (activeShape) {
+                    // --- 1. ЗАПИС ТРЕКУ (Ваш існуючий код) ---
+                    if (!activeShape.trackPoints) activeShape.trackPoints = [];
+                    const newPoint = [lat, lng];
+                    let shouldAdd = false;
+                    if (activeShape.trackPoints.length === 0) {
+                        shouldAdd = true;
+                    } else {
+                        const lastP = activeShape.trackPoints[activeShape.trackPoints.length - 1];
+                        const dist = turf.distance(turf.point([lastP[1], lastP[0]]), turf.point([lng, lat]), { units: 'meters' });
+                        if (dist > 5) shouldAdd = true;
+                    }
+                    if (shouldAdd) {
+                        activeShape.trackPoints.push(newPoint);
+                        renderTrack();
+                        saveData();
+                    }
+
+                    // --- 2. АВТОМАТИЧНЕ ЗАФАРБОВУВАННЯ (Додаємо сюди) ---
+                    if (activeShape.internalStrips) {
+                        const myPos = turf.point([lng, lat]);
+                        const trackWidth = parseFloat(document.getElementById('lineSpacing').value) || 10;
+
+                        activeShape.internalStrips.forEach((stripCoords, index) => {
+                            if (activeShape.completedStrips[index]) return;
+
+                            if (!sessionProgress[index]) {
+                                sessionProgress[index] = {
+                                    points: getControlPoints(stripCoords),
+                                    hitCount: 0,
+                                    hits: new Array(10).fill(false)
+                                };
+                            }
+
+                            const data = sessionProgress[index];
+                            data.points.forEach((cp, i) => {
+                                if (!data.hits[i]) {
+                                    const dist = turf.distance(myPos, turf.point(cp), { units: 'meters' });
+                                    // Реєструємо "влучання", якщо ми в радіусі 70% від ширини захвату
+                                    if (dist < (trackWidth * 0.7)) {
+                                        data.hits[i] = true;
+                                        data.hitCount++;
+                                    }
+                                }
+                            });
+
+                            if (data.hitCount >= 7) {
+                                activeShape.completedStrips[index] = true;
+                                delete sessionProgress[index];
+                                updateUI(); // Оновлюємо карту, щоб смуга стала зеленою
+                                updateCompletedStats(); // Оновлюємо га
+                                saveData();
+                            }
+                        });
+                    }
+                }
+                map.panTo([lat, lng]);
+            }
+
+
+            lastLocation = { lat, lng };
+            lastTimestamp = currentTimestamp;
+        },
+        (error) => console.warn(error),
+        { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+    );
+}
+
+function getControlPoints(stripCoords) {
+    try {
+        const poly = turf.polygon(stripCoords);
+        const line = turf.lineString([stripCoords[0][0], stripCoords[0][3]]); // Приблизна центральна лінія
+        const points = [];
+        const length = turf.length(line);
+
+        for (let i = 1; i <= 10; i++) {
+            const segment = (length / 11) * i;
+            points.push(turf.along(line, segment).geometry.coordinates);
+        }
+        return points;
+    } catch (e) { return []; }
 }

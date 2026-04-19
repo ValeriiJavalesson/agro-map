@@ -81,6 +81,8 @@
                     <button onclick="deleteLines()" class="btn-danger" style="flex: 1;"
                         title="Видалити колії">✕</button>
                 </div>
+                <button onclick="clearTrack()" class="btn-danger-outline" style="width: 100%; margin-top: 8px;">🧹
+                    Очистити намальований трек</button>
 
                 <div class="actions-grid">
                     <button onclick="toggleLock()" id="lockBtn">🔓 Редагувати</button>
@@ -120,12 +122,12 @@
     <script src="js/turf.min.js"></script>
     <script src="js/script.js"></script>
     <script>
-          if ('serviceWorker' in navigator) {
+        if ('serviceWorker' in navigator) {
             // Додаємо назву репозиторію до шляху sw.js
             navigator.serviceWorker.register('/agro-map/sw.js')
-              .then(() => console.log("PWA Ready"))
-              .catch((err) => console.log("PWA Error", err));
-          }
+                .then(() => console.log("PWA Ready"))
+                .catch((err) => console.log("PWA Error", err));
+        }
     </script>
 </body>
 

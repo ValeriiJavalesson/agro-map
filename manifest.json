@@ -1,7 +1,7 @@
 {
   "name": "Agro Map Tool",
   "short_name": "AgroMap",
-  "start_url": "/agro-map/",
+  "start_url": "/agro-map/index.html",
   "scope": "/agro-map/",
   "display": "standalone",
   "background_color": "#2c3e50",
