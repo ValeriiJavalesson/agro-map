@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="uk">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Multi-Area Map Tool</title>
+    <!-- Бібліотеки та стилі з папок -->
+    <link rel="stylesheet" href="styles/leaflet.css" />
+    <link rel="stylesheet" href="styles/style.css">
+    <link rel="manifest" href="manifest.json">
+    <!-- Тема для мобільного браузера -->
+    <meta name="theme-color" content="#2c3e50">
+    <!-- Налаштування для iOS -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+</head>
+
+<body>
+    <!-- Бокова панель -->
+    <div id="menuBtn" onclick="toggleSidebar()">☰</div>
+    <div id="sidebar">
+        <!-- Екран 1: Список всіх полів -->
+        <div id="view-list">
+            <div class="sidebar-header" style="position: relative;">
+                <h3 style="margin: 0;">Мої поля</h3>
+                <!-- Кнопка закриття всередині -->
+                <span onclick="toggleSidebar()"
+                    style="position: absolute; right: 10px; top: 10px; cursor: pointer; font-size: 20px;">✕</span>
+                <button onclick="createNewShape()" class="btn-add" style="margin-top: 10px;">+ Нове</button>
+            </div>
+            <div id="shapes-list" style="overflow-y: auto;"></div>
+        </div>
+
+        <!-- Екран 2: Керування вибраним полем (приховано за замовчуванням) -->
+        <!-- Екран 2: Керування вибраним полем -->
+        <div id="view-edit" style="display: none;">
+            <div class="sidebar-header">
+                <button onclick="showListView()" class="btn-back">← До списку</button>
+            </div>
+
+            <div class="edit-controls">
+                <div class="field-stats-card">
+                    <!-- Колір та Назва в один ряд -->
+                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                        <div class="color-picker-wrapper">
+                            <input type="color" id="colorPicker" onchange="updateActiveShapeColor(this.value)">
+                        </div>
+                        <h3 id="editingFieldName"
+                            style="margin: 0; color: white; flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                            Назва поля</h3>
+                    </div>
+
+                    <div class="stat-row">
+                        <span>Площа:</span>
+                        <b id="area">0.0000 га</b>
+                    </div>
+                    <div class="stat-row">
+                        <span>Оброблено:</span>
+                        <b id="completedArea" class="highlight">0.0000 га</b>
+                    </div>
+                </div>
+
+                <div class="input-group">
+                    <label>Назва поля:</label>
+                    <input type="text" id="shapeNameInput" oninput="updateActiveShapeName(this.value)">
+                </div>
+
+                <div class="line-settings">
+                    <div class="input-mini-group">
+                        <label>Колія (м):</label>
+                        <input type="number" id="lineSpacing" value="10" step="0.1" onchange="saveLineParams()">
+                    </div>
+                    <div class="input-mini-group">
+                        <label>Зсув (м):</label>
+                        <input type="number" id="startOffset" value="0" step="0.1" onchange="saveLineParams()">
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 8px;">
+                    <button onclick="generateLines()" class="btn-primary" style="flex: 2;">Побудувати ☰</button>
+                    <button onclick="deleteLines()" class="btn-danger" style="flex: 1;"
+                        title="Видалити колії">✕</button>
+                </div>
+
+                <div class="actions-grid">
+                    <button onclick="toggleLock()" id="lockBtn">🔓 Редагувати</button>
+                    <button onclick="focusOnShape()">🎯 Центрувати</button>
+                    <button onclick="deleteActiveShape()" class="btn-danger-outline" style="grid-column: span 2;">🗑️
+                        Видалити все поле</button>
+                </div>
+            </div>
+
+        </div>
+
+        <div class="sidebar-footer">
+            <!-- Кнопки GPS та шарів уже там є -->
+            <div style="display: flex; gap: 5px; padding: 10px; border-top: 1px solid #34495e;">
+                <button onclick="exportData()" class="btn-primary" style="flex: 1; font-size: 12px;">📥
+                    Експорт</button>
+                <button onclick="document.getElementById('importFile').click()" class="btn-primary"
+                    style="flex: 1; font-size: 12px;">📤 Імпорт</button>
+                <input type="file" id="importFile" style="display: none;" onchange="importData(event)">
+            </div>
+        </div>
+    </div>
+
+
+    <!-- Мапа -->
+    <div id="map">
+        <button onclick="toggleMapLayer()" id="layerBtn" class="map-overlay-btn">🛰️</button>
+        <button id="trackBtn" onclick="toggleLiveTracking()" class="map-overlay-btn btn-track-map"
+            title="Стежити">📍</button>
+        <div id="speedometer" class="map-overlay-info">
+            <span id="speedValue">0</span>
+        </div>
+    </div>
+
+
+    <script src="js/leaflet.js"></script>
+    <script src="js/turf.min.js"></script>
+    <script src="js/script.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js')
+                .then(() => console.log("PWA Ready"))
+                .catch((err) => console.log("PWA Error", err));
+        }
+    </script>
+</body>
+
+</html>

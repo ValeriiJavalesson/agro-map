@@ -1,0 +1,405 @@
+/* Базові налаштування */
+body,
+html {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+}
+
+body {
+    display: block;
+    /* Відміняємо flex, бо тепер використовуємо absolute */
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Бічна панель */
+#sidebar {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    width: 260px;
+    background: #2c3e50;
+    color: white;
+    z-index: 2000;
+    /* Поверх усього */
+    border-radius: 8px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 40px);
+    transition: transform 0.3s ease;
+    /* Анімація ховання */
+}
+
+#sidebar.hidden {
+    transform: translateX(-280px);
+}
+
+#menuBtn {
+    position: absolute;
+    top: 15px;
+    left: 15px;
+    z-index: 1500;
+    /* Між картою і сайдбаром */
+    width: 45px;
+    height: 45px;
+    background: #2c3e50;
+    color: white;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+
+/* Мапа займає весь простір, що залишився */
+#map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* Кнопки в списку полів */
+.shape-btn {
+    width: 100%;
+    padding: 12px 15px;
+    border: none;
+    border-bottom: 1px solid #34495e;
+    text-align: left;
+    cursor: pointer;
+    background: transparent;
+    color: white;
+    transition: 0.2s;
+    border-left: 5px solid transparent;
+    /* Додаємо невидиму лінію для стабільності */
+}
+
+#shapes-list {
+    max-height: 50vh;
+    /* Обмежуємо висоту самого списку */
+    overflow-y: auto;
+    /* Вмикаємо прокрутку */
+}
+
+.shape-btn:hover {
+    background: #34495e;
+    border-left: 5px solid #3498db;
+    /* Підсвічуємо край при наведенні */
+}
+
+/* Панель редагування поля */
+.edit-controls {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.field-stats-card {
+    background: #34495e;
+    padding: 12px;
+    border-radius: 8px;
+    border-left: 4px solid #3498db;
+}
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 13px;
+    margin-bottom: 4px;
+}
+
+.stat-row b {
+    color: #2ecc71;
+}
+
+.highlight {
+    color: #f1c40f !important;
+}
+
+/* Кругла кнопка кольору */
+.color-picker-wrapper {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid white;
+    flex-shrink: 0;
+    position: relative;
+}
+
+.color-picker-wrapper input[type="color"] {
+    position: absolute;
+    top: -10px;
+    left: -10px;
+    width: 50px;
+    height: 50px;
+    cursor: pointer;
+}
+
+/* Блок налаштувань колій (Компактний) */
+.line-settings {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: #34495e;
+    padding: 10px;
+    border-radius: 6px;
+    box-sizing: border-box;
+}
+
+.input-mini-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.input-mini-group label {
+    font-size: 11px;
+    color: #bdc3c7;
+    white-space: nowrap;
+}
+
+.input-mini-group input {
+    width: 100%;
+    padding: 6px;
+    border-radius: 4px;
+    border: none;
+    background: white;
+    color: #2c3e50;
+    font-weight: bold;
+    text-align: center;
+    box-sizing: border-box;
+}
+
+/* Кнопки дій */
+button {
+    padding: 8px 12px;
+    cursor: pointer;
+    border: none;
+    border-radius: 4px;
+    font-weight: 500;
+    transition: opacity 0.2s;
+}
+
+button:hover {
+    opacity: 0.9;
+}
+
+.btn-primary {
+    background: #3498db;
+    color: white;
+}
+
+.btn-danger {
+    background: #e74c3c;
+    color: white;
+}
+
+.btn-danger-outline {
+    background: transparent;
+    border: 1px solid #e74c3c;
+    color: #e74c3c;
+}
+
+.btn-danger-outline:hover {
+    background: #e74c3c;
+    color: white;
+}
+
+.actions-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+}
+
+/* Елементи Leaflet */
+.dot {
+    background-color: var(--main-color, blue);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.3);
+}
+
+.edge-label {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid #333;
+    border-radius: 3px;
+    padding: 1px 4px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+path.leaflet-interactive:focus,
+.leaflet-container :focus {
+    outline: none !important;
+}
+
+/* Приховуємо стрілки в input number */
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+.map-overlay-btn {
+    position: absolute;
+    top: 20px;
+    /* Перемістили вгору */
+    right: 20px;
+    /* Залишили справа */
+    z-index: 1000;
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: white;
+    border: 2px solid rgba(0, 0, 0, 0.2);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.map-overlay-btn:hover {
+    background: #f4f4f4;
+}
+
+/* Позиція кнопки супутника */
+.btn-layer {
+    top: 20px;
+}
+
+/* Позиція кнопки стеження (нижче на 55px) */
+.btn-track-map {
+    top: 75px;
+    transition: background-color 0.3s, color 0.3s;
+}
+
+/* Стиль, коли режим стеження активний */
+.btn-track-map.active {
+    background-color: #27ae60;
+    color: white;
+    border-color: #2ecc71;
+}
+
+.sidebar-footer {
+    border-top: 1px solid #34495e;
+}
+
+/* Контейнер всередині кнопки списку */
+.shape-btn-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Маленький кольоровий кружечок у списку */
+.color-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.5);
+    flex-shrink: 0;
+    /* Щоб кружечок не стискався, якщо назва довга */
+}
+
+/* Назва поля в списку */
+.shape-name {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 14px;
+}
+
+.sidebar-header {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    /* Заголовок зверху, кнопка знизу */
+    align-items: center;
+    /* Центруємо все по горизонталі */
+    gap: 10px;
+    border-bottom: 1px solid #34495e;
+}
+
+.btn-add {
+    width: 80%;
+    /* Робимо кнопку широкою для зручності */
+    background: #27ae60;
+    color: white;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.3s;
+}
+
+.btn-add:hover {
+    background: #2ecc71;
+}
+
+.location-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.arrow-icon {
+    width: 0;
+    height: 0;
+    /* Розміри стрілки */
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    /* Синій колір стрілки */
+    border-bottom: 22px solid #3498db;
+
+    /* Чіткий білий контур замість розмитого світіння */
+    filter: drop-shadow(0 0 1px white) drop-shadow(0 0 1px white) drop-shadow(0 0 1px white);
+
+    /* Прибираємо будь-які внутрішні елементи */
+    position: relative;
+    pointer-events: none;
+}
+
+.map-overlay-info {
+    position: absolute;
+    right: 12px;
+    top: 135px;
+    z-index: 1000;
+    /* Прямокутна форма */
+    width: 85px;
+    /* Трохи ширше, щоб влізли цифри з комою */
+    height: 50px;
+    background: rgba(0, 0, 0, 0.85);
+    color: #2ecc71;
+    border-radius: 6px;
+    /* Легке закруглення кутів */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    font-family: 'Courier New', Courier, monospace;
+    pointer-events: none;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+#speedValue {
+    font-size: 26px;
+    font-weight: bold;
+    letter-spacing: -1px;
+    /* Щоб цифри стояли щільніше */
+}
