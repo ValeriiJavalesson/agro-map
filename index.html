@@ -120,11 +120,12 @@
     <script src="js/turf.min.js"></script>
     <script src="js/script.js"></script>
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('sw.js')
-                .then(() => console.log("PWA Ready"))
-                .catch((err) => console.log("PWA Error", err));
-        }
+          if ('serviceWorker' in navigator) {
+            // Додаємо назву репозиторію до шляху sw.js
+            navigator.serviceWorker.register('/agro-map/sw.js')
+              .then(() => console.log("PWA Ready"))
+              .catch((err) => console.log("PWA Error", err));
+          }
     </script>
 </body>
 
