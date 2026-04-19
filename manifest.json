@@ -1,7 +1,8 @@
 {
   "name": "Agro Map Tool",
   "short_name": "AgroMap",
-  "start_url": "index.html",
+  "start_url": "/agro-map/",
+  "scope": "/agro-map/",
   "display": "standalone",
   "background_color": "#2c3e50",
   "theme_color": "#2c3e50",
@@ -10,7 +11,8 @@
     {
       "src": "https://flaticon.com",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
   ]
 }
