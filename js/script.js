@@ -4,12 +4,21 @@ let lastLocation = null;
 let lastTimestamp = null;
 let currentTrackPoints = []; // Масив для точок поточного треку
 let trackLayer = null;      // Шар на карті для малювання
+const savedShapes = localStorage.getItem('savedShapes');
+// const shapes = savedShapes ? JSON.parse(savedShapes) : [];
 let shapes = JSON.parse(localStorage.getItem('savedShapes')) || [];
-let activeShapeId = localStorage.getItem('activeShapeId') || null;
+let trackCalcTimeout = null;
+
+// 2. Потім завантажуємо ID і ВІДРАЗУ перевіряємо, чи таке поле існує
+const savedId = localStorage.getItem('activeShapeId');
+// Якщо ID є в базі — беремо його, якщо ні — ставимо null
+let activeShapeId = null;
+
 let markers = [];
 let leafletPolygons = {}; // Об'єкт для зберігання малюнків полігонів
 let isTrackingActive = false; // Прапорець для запису треку та руху камери
 let sessionProgress = {};
+let isNewSegmentStarting = false;
 
 const colorPicker = document.getElementById('colorPicker');
 
@@ -17,12 +26,15 @@ const colorPicker = document.getElementById('colorPicker');
 // Константи шарів (карта та супутник)
 // 1. Звичайна карта (OpenStreetMap)
 const streetLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 22,        // До якого рівня можна крутити коліщатко
+    maxNativeZoom: 19,  // Максимальний рівень, який реально є у сервера (зазвичай 19)
     attribution: '© OpenStreetMap'
 });
 
 // 2. Супутник Google (lyrs=s — супутник, lyrs=y — гібрид з підписами)
 const satelliteLayer = L.tileLayer('https://{s}.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
-    maxZoom: 20,
+    maxZoom: 22,
+    maxNativeZoom: 20,  // У Google Satellite зазвичай є 20 рівнів
     subdomains: ['mt0', 'mt1', 'mt2', 'mt3'],
     attribution: '© Google Maps'
 });
@@ -34,12 +46,126 @@ let currentLayerType = localStorage.getItem('mapLayerType') || 'streets';
 // Створення карти з урахуванням збереженого шару
 const map = L.map('map', {
     center: [
-        localStorage.getItem('mapLat') || 50.45,
-        localStorage.getItem('mapLng') || 30.52
+        localStorage.getItem('mapLat') || 49.00,
+        localStorage.getItem('mapLng') || 31.00
     ],
     zoom: localStorage.getItem('mapZoom') || 13,
+    rotate: true,
+    touchRotate: true,
+    rotateControl: false,
+
+    // Ключові зміни для "гумовості":
+    zoomAnimation: true,      // Вимикаємо "картинну" анімацію, щоб вектори не зависали
+    fadeAnimation: true,
+    markerZoomAnimation: false,
+    inertia: false,            // Прибираємо інерцію, щоб карта зупинялася миттєво за пальцями
+
+    renderer: L.svg({
+        padding: 1,            // Збільшуємо зону малювання
+        tolerance: 10          // Покращуємо продуктивність
+    }),
+    doubleClickZoom: false,
+    zoomSnap: 0,               // Дозволяє будь-який рівень зуму (наприклад 15.123)
+    zoomDelta: 0.1,
+    maxZoom: 22,
     layers: [currentLayerType === 'satellite' ? satelliteLayer : streetLayer]
 });
+renderShapes();
+
+// Функція миттєвого перемальовування
+function forceSyncVectors() {
+    if (map.renderer && map.renderer._update) {
+        map.renderer._update();
+    }
+}
+
+map.on('zoom rotate', function () {
+    // 1. Повідомляємо рендереру, що потрібно оновити координати
+    if (map.renderer) map.renderer._update();
+
+    // 2. ХАК: Емулюємо завершення зуму, щоб Leaflet перерахував вектори
+    map.fire('zoomend');
+
+    // 3. Якщо використовується плагін обертання, примусово оновлюємо його контейнер
+    if (map.getPanes().mapPane) {
+        map.getPanes().mapPane.style.transform = map.getPanes().mapPane.style.transform;
+    }
+});
+map.on('dblclick', function (e) {
+    // Наближаємо на 1.5 рівня від поточного (оптимально для Agro-Map)
+    const currentZoom = map.getZoom();
+    map.setZoom(currentZoom + 1, {
+        animate: true
+    });
+});
+
+
+// Створюємо кастомний контроль для компаса
+const CompassControl = L.Control.extend({
+    options: { position: 'bottomright' }, // Розташування
+    onAdd: function (map) {
+        const div = L.DomUtil.create('div', 'compass-control');
+        div.innerHTML = '<div id="compassArrow" class="compass-arrow"></div>';
+
+        // При натисканні на компас - повертаємо карту на північ
+        div.onclick = function () {
+            if (map.setBearing) {
+                map.setBearing(0);
+            } else {
+                map.setView(map.getCenter(), map.getZoom()); // Якщо немає плагіна обертання
+            }
+        };
+        return div;
+    }
+});
+
+map.addControl(new CompassControl());
+
+// 1. Подія, яка спрацьовує на кожному мікро-кадрі руху карти
+map.on('rotate', function () {
+    const arrow = document.getElementById('compassArrow');
+    if (arrow) {
+        const bearing = map.getBearing();
+        // Просто крутимо вісь
+        arrow.style.transform = `rotate(${bearing}deg)`;
+    }
+});
+
+// 2. Функція плавного повернення
+function resetNorth() {
+    if (typeof map.setBearing !== 'function') return;
+
+    let startBearing = map.getBearing();
+
+    // 1. Нормалізуємо кут, щоб він був у межах [-180, 180]
+    // Це змусить карту розуміти, що 350° — це насправді -10°
+    let targetDiff = ((startBearing + 180) % 360 + 360) % 360 - 180;
+
+    const duration = 800; // 0.8 секунди
+    const startTime = performance.now();
+
+    function animate(currentTime) {
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+
+        // Функція плавності (Ease Out)
+        const ease = 1 - Math.pow(1 - progress, 3);
+
+        // Розраховуємо новий кут, віднімаючи частину "різниці"
+        const currentBearing = startBearing - (targetDiff * ease);
+
+        map.setBearing(currentBearing);
+
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        } else {
+            map.setBearing(0); // Фінальна фіксація в нуль
+        }
+    }
+
+    requestAnimationFrame(animate);
+}
+
 
 // Функція перемикання (її можна додати нижче або після ініціалізації)
 function toggleMapLayer() {
@@ -65,26 +191,47 @@ function toggleMapLayer() {
 
 
 
-// Ініціалізація при завантаженні
 function init() {
-    // document.getElementById('layerBtn').innerText = currentLayerType === 'satellite' ? "Карта" : "Супутник";
+    // 1. СУВОРА ПЕРЕВІРКА ДАНИХ ПЕРЕД РЕНДЕРОМ
+    const savedId = localStorage.getItem('activeShapeId');
+
+    // Перевіряємо, чи є такий ID у масиві shapes (який вже має бути завантажений глобально)
+    // Якщо ID — це рядок "null" або поля не існує, скидаємо в null
+    if (savedId && shapes.some(s => s.id === savedId)) {
+        activeShapeId = savedId;
+    } else {
+        activeShapeId = null;
+        localStorage.removeItem('activeShapeId'); // Чистимо сміття ("null")
+    }
+
+    // 2. НАЛАШТУВАННЯ ШАРІВ КАРТИ
     const savedLayer = localStorage.getItem('mapLayerType') || 'streets';
     const btn = document.getElementById('layerBtn');
     if (btn) {
-        // Встановлюємо правильну іконку відразу
         btn.innerText = (savedLayer === 'satellite') ? '🗺️' : '🛰️';
     }
-    renderShapes();
-    updateUI();
+
+
+    // 3. ОНОВЛЕННЯ ІНТЕРФЕЙСУ (саме в такому порядку)
+    renderShapes(); // Тут кнопка "Стежити" отримає свій стан disabled/enabled
+    updateUI();     // Оновлення списків та статистики
+
+    // 4. ВІЗУАЛІЗАЦІЯ ТРЕКУ
     if (activeShapeId) {
-        // Переконуємося, що активне поле існує в масиві
-        const activeShape = shapes.find(s => s.id === activeShapeId);
-        if (activeShape) {
-            renderTrack();
-        }
+        renderTrack();
+        // focusOnShape(); // Можна додати, щоб карта відразу центрувалася на полі
     }
+
+    // 5. ЗАПУСК СЕРВІСІВ
     startGlobalGPS();
+    const trackBtn = document.getElementById('trackBtn');
+    if (!activeShapeId) {
+        trackBtn.disabled = true;
+        trackBtn.setAttribute('disabled', 'disabled');
+        trackBtn.style.opacity = "0.5";
+    }
 }
+
 
 function createNewShape() {
     const id = Date.now().toString();
@@ -133,6 +280,9 @@ function closeModal() {
 function showEditView(shape) {
     document.getElementById('view-list').style.display = 'none';
     document.getElementById('view-edit').style.display = 'block';
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.remove('list-active');
+    sidebar.classList.add('edit-active');
 
     // Заповнюємо дані у поля
     document.getElementById('editingFieldName').innerText = shape.name || "Поле";
@@ -140,69 +290,110 @@ function showEditView(shape) {
     document.getElementById('colorPicker').value = shape.color || "#2980b9";
     document.getElementById('lineSpacing').value = shape.lineSpacing !== undefined ? shape.lineSpacing : 10;
     document.getElementById('startOffset').value = shape.startOffset !== undefined ? shape.startOffset : 0;
+    document.getElementById('view-list').style.display = 'none';
+    document.getElementById('view-edit').style.display = 'block';
 }
 
 function showListView() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.remove('edit-active');
+    sidebar.classList.add('list-active');
+    // 1. Скидаємо змінну в коді
     activeShapeId = null;
+
+    // 2. ВИДАЛЯЄМО ID зі сховища, щоб при перезавантаженні поле не відкрилося само
+    localStorage.removeItem('activeShapeId');
+
+    const trackAreaEl = document.getElementById('trackArea');
+    if (trackAreaEl) trackAreaEl.innerText = "0.0000 га";
+
+    // 3. Керуємо інтерфейсом
     document.getElementById('view-list').style.display = 'block';
     document.getElementById('view-edit').style.display = 'none';
+
+    // 4. Оновлюємо списки (це заблокує кнопку "Стежити")
     renderShapes();
     updateUI();
+
+    // 5. Очищуємо треки з карти, оскільки поле більше не активне
+    if (trackLayer) {
+        trackLayer.clearLayers();
+    }
+    document.getElementById('view-list').style.display = 'block';
+    document.getElementById('view-edit').style.display = 'none';
 }
+
+
 function renderShapes() {
     const container = document.getElementById('shapes-list');
+    const trackBtn = document.getElementById('trackBtn');
     const controls = document.getElementById('active-shape-controls');
-    const nameInput = document.getElementById('shapeNameInput');
 
-    if (!container) return; // Захист від помилок, якщо HTML ще не завантажився
-
+    if (!container) return;
     container.innerHTML = '';
 
-    if (shapes.length > 0 && activeShapeId) {
+    // --- КЛЮЧОВИЙ МОМЕНТ: Перевірка стану при кожному рендері ---
+    const activeFieldExists = shapes.some(s => s.id === activeShapeId);
+
+    if (activeShapeId && activeFieldExists) {
+        trackBtn.disabled = false;
+        trackBtn.style.opacity = "1";
+        trackBtn.style.pointerEvents = "auto";
         if (controls) controls.style.display = 'flex';
-        const activeShape = shapes.find(s => s.id === activeShapeId);
-        if (nameInput && activeShape) nameInput.value = activeShape.name;
     } else {
+        trackBtn.disabled = true;
+        trackBtn.style.opacity = "0.5";
+        trackBtn.style.pointerEvents = "none";
         if (controls) controls.style.display = 'none';
+        // Якщо поле не існує, скидаємо ID в справжній null
+        if (!activeFieldExists) activeShapeId = null;
+        saveData();
     }
 
     shapes.forEach(shape => {
         const btn = document.createElement('button');
-        // btn.innerText = shape.name;
-        // btn.className = 'shape-btn'; // Можна додати клас для стилів
-        // btn.style.background = shape.id === activeShapeId ? '#34495e' : '#bdc3c7';
         btn.className = `shape-btn ${shape.id === activeShapeId ? 'active' : ''}`;
 
-        // Створюємо HTML структуру: кружечок з кольором + назва
         btn.innerHTML = `
             <div class="shape-btn-content">
                 <span class="color-indicator" style="background-color: ${shape.color || '#3498db'}"></span>
                 <span class="shape-name">${shape.name || 'Без назви'}</span>
             </div>
         `;
-        btn.onclick = () => {
-            activeShapeId = shape.id;
 
-            if (typeof calculateArea === 'function') {
-                calculateArea(shape);
-            }
+        btn.onclick = () => {
+            activeShapeId = shape.id; // Встановлюємо ID
+            const trackAreaEl = document.getElementById('trackArea');
+            if (trackAreaEl) trackAreaEl.innerText = "0.0000 га";
+            // 1. Оновлюємо візуальний стан списку та кнопки "Стежити"
+            renderShapes();
+
+            // 2. Викликаємо ваші стандартні функції
+            if (typeof calculateArea === 'function') calculateArea(shape);
 
             const colorPicker = document.getElementById('colorPicker');
             if (colorPicker) colorPicker.value = shape.color;
 
             saveData();
-            updateUI();
 
-            if (typeof updateCompletedStats === 'function') {
-                updateCompletedStats();
+            // 3. ПЕРЕХІД В ДЕТАЛІ (Переконайтеся, що ця функція викликається)
+            if (typeof showEditView === 'function') {
+                showEditView(shape);
             }
-            showEditView(shape);
+
+            if (typeof updateUI === 'function') updateUI();
+            if (typeof updateCompletedStats === 'function') updateCompletedStats();
+
             renderTrack();
-            focusOnShape();
+            if (typeof focusOnShape === 'function') focusOnShape();
         };
+
         container.appendChild(btn);
     });
+    updateTrackStats();
 }
+
+
 
 function saveLineParams() {
     const shape = shapes.find(s => s.id === activeShapeId);
@@ -299,42 +490,25 @@ function updateUI() {
                     },
                     onEachFeature: (feature, layer) => {
                         layer.isStrip = true;
-
-                        const stripHa = turf.area(feature) / 10000;
-                        layer.bindTooltip(`Смуга №${index + 1}: ${stripHa.toFixed(4)} га`, {
-                            sticky: true,
-                            direction: 'top'
-                        });
-
                         layer.stripIndex = index;
+                        const stripHa = turf.area(feature) / 10000;
+                        const tooltipText = `Смуга №${index + 1}: ${stripHa.toFixed(4)} га`;
 
                         layer.on('mouseover', function (e) {
-                            // Замість перебору всіх шарів, просто скидаємо стилі через CSS або групу
-                            // Але якщо хочете залишити скидання, робимо це акуратно:
-                            map.eachLayer(l => {
-                                if (l.isStrip && l.options && l.options.fillOpacity !== 0.6) {
-                                    l.setStyle({ fillOpacity: 0.15, weight: 1, color: shape.color });
-                                }
-                            });
+                            // --- ПЕРЕВІРКА ---
+                            if (shape.id !== activeShapeId) return;
 
-                            // Підсвічуємо поточну
-                            this.setStyle({
-                                fillOpacity: 0.4,
-                                weight: 2,
-                                color: '#ffffff'
-                            });
+                            // 1. ПОКАЗУЄМО ПІДКАЗКУ (тільки для активного поля)
+                            this.bindTooltip(tooltipText, {
+                                sticky: true,
+                                direction: 'top'
+                            }).openTooltip();
 
-                            // ПРИБИРАЄМО bringToFront() — це часто причина того, що підсвітка зникає
-                        });
-
-                        layer.on('mouseover', function (e) {
-                            // 1. Скидаємо стилі інших смуг, АЛЕ враховуємо їхній статус
+                            // 2. СКИДАННЯ СТИЛІВ ІНШИХ СМУГ (ваш існуючий код)
                             map.eachLayer(l => {
                                 if (l.isStrip && l.options) {
-                                    const lIndex = l.stripIndex; // збережемо індекс для перевірки
+                                    const lIndex = l.stripIndex;
                                     const lCompleted = shape.completedStrips && shape.completedStrips[lIndex];
-
-                                    // Якщо смуга не та, на яку ми навели, повертаємо їй її законний стиль
                                     if (l !== this) {
                                         l.setStyle({
                                             fillOpacity: lCompleted ? 0.6 : 0.15,
@@ -345,37 +519,89 @@ function updateUI() {
                                 }
                             });
 
-                            // 2. Підсвічуємо поточну смугу (робимо її яскравішою незалежно від статусу)
+                            // 3. ПІДСВІТКА ПОТОЧНОЇ СМУГИ
+                            const isNowCompleted = shape.completedStrips && shape.completedStrips[index];
                             this.setStyle({
-                                fillOpacity: isCompleted ? 0.8 : 0.4, // якщо оброблена — ще яскравіша, якщо ні — просто підсвічена
+                                fillOpacity: isNowCompleted ? 0.8 : 0.4,
                                 weight: 3,
                                 color: '#ffffff'
                             });
                         });
 
+                        layer.on('mouseout', function (e) {
+                            // --- ПЕРЕВІРКА ---
+                            if (shape.id !== activeShapeId) return;
+
+                            // ЗАКРИВАЄМО ТА ВІДВ'ЯЗУЄМО ПІДКАЗКУ (щоб не лишалася на неактивних полях)
+                            this.closeTooltip();
+                            this.unbindTooltip();
+
+                            const isNowCompleted = shape.completedStrips && shape.completedStrips[index];
+                            this.setStyle({
+                                fillOpacity: isNowCompleted ? 0.6 : 0.15,
+                                weight: isNowCompleted ? 2 : 1,
+                                color: isNowCompleted ? '#27ae60' : shape.color
+                            });
+                        });
+
+
+                        // layer.on('click', function (e) {
+                        //     L.DomEvent.stopPropagation(e);
+
+                        //     // Знімаємо фокус з елемента, щоб не з'являлася рамка браузера
+                        //     if (this.getElement()) {
+                        //         this.getElement().blur();
+                        //     }
+
+                        //     if (!shape.completedStrips) shape.completedStrips = {};
+                        //     shape.completedStrips[index] = !shape.completedStrips[index];
+
+                        //     // Замість повного updateUI(), що вбиває продуктивність, 
+                        //     // просто оновимо стиль цього конкретного шару
+                        //     this.setStyle({
+                        //         color: shape.completedStrips[index] ? '#27ae60' : shape.color,
+                        //         fillColor: shape.completedStrips[index] ? '#2ecc71' : shape.color,
+                        //         fillOpacity: shape.completedStrips[index] ? 0.6 : 0.15,
+                        //         weight: shape.completedStrips[index] ? 2 : 1
+                        //     });
+                        //     updateCompletedStats();
+                        //     saveData();
+                        //     updateCompletedStats();
+                        // });
                         layer.on('click', function (e) {
                             L.DomEvent.stopPropagation(e);
 
-                            // Знімаємо фокус з елемента, щоб не з'являлася рамка браузера
+                            // --- ДОДАЄМО ПЕРЕВІРКУ ---
+                            // Якщо це поле не є активним, ми забороняємо ручне відмічання смуг
+                            if (shape.id !== activeShapeId) {
+                                console.warn("Ці колії належать іншому полю. Спочатку виберіть його у списку.");
+                                return;
+                            }
+
+                            // Знімаємо фокус з елемента
                             if (this.getElement()) {
                                 this.getElement().blur();
                             }
 
                             if (!shape.completedStrips) shape.completedStrips = {};
+
+                            // Перемикаємо статус
                             shape.completedStrips[index] = !shape.completedStrips[index];
 
-                            // Замість повного updateUI(), що вбиває продуктивність, 
-                            // просто оновимо стиль цього конкретного шару
+                            // Оновлюємо стиль поточної смуги
+                            const isNowCompleted = shape.completedStrips[index];
                             this.setStyle({
-                                color: shape.completedStrips[index] ? '#27ae60' : shape.color,
-                                fillColor: shape.completedStrips[index] ? '#2ecc71' : shape.color,
-                                fillOpacity: shape.completedStrips[index] ? 0.6 : 0.15,
-                                weight: shape.completedStrips[index] ? 2 : 1
+                                color: isNowCompleted ? '#27ae60' : shape.color,
+                                fillColor: isNowCompleted ? '#2ecc71' : shape.color,
+                                fillOpacity: isNowCompleted ? 0.6 : 0.15,
+                                weight: isNowCompleted ? 2 : 1,
+                                dashArray: isNowCompleted ? '' : '5, 5' // Смуга стає суцільною, якщо виконана
                             });
+
                             updateCompletedStats();
                             saveData();
-                            updateCompletedStats();
                         });
+
                     }
 
                 }).addTo(map);
@@ -462,7 +688,7 @@ function updateUI() {
             if (lockBtn) lockBtn.innerText = shape.isLocked ? "🔒" : "🔓";
         }
     });
-    renderTrack(); 
+    renderTrack();
 }
 
 
@@ -527,20 +753,42 @@ function calculateArea(shape) {
 
 function saveData() {
     try {
-        localStorage.setItem('savedShapes', JSON.stringify(shapes));
-        localStorage.setItem('activeShapeId', activeShapeId);
+        // 1. Оптимізація координат перед збереженням (зменшуємо розмір JSON у 2-3 рази)
+        const optimizedShapes = shapes.map(shape => {
+            const newShape = { ...shape };
+            if (newShape.trackSegments) {
+                newShape.trackSegments = newShape.trackSegments.map(segment =>
+                    segment.map(point => [
+                        Math.round(point[0] * 1000000) / 1000000, // 6 знаків після коми
+                        Math.round(point[1] * 1000000) / 1000000
+                    ])
+                );
+            }
+            return newShape;
+        });
 
-        const center = map.getCenter();
-        localStorage.setItem('mapLat', center.lat);
-        localStorage.setItem('mapLng', center.lng);
-        localStorage.setItem('mapZoom', map.getZoom());
+        localStorage.setItem('savedShapes', JSON.stringify(optimizedShapes));
+
+        // 3. Дані карти
+        if (typeof map !== 'undefined' && map !== null) {
+            const center = map.getCenter();
+            localStorage.setItem('mapLat', center.lat.toFixed(6));
+            localStorage.setItem('mapLng', center.lng.toFixed(6));
+            localStorage.setItem('mapZoom', map.getZoom());
+        }
 
         console.log("Дані успішно збережено.");
     } catch (e) {
-        console.error("Помилка збереження: можливо, вичерпано ліміт пам'яті (LocalStorage)", e);
-        alert("Пам'ять переповнена! Спробуйте видалити старі треки.");
+        console.error("Помилка збереження:", e);
+
+        // Показуємо алерт тільки якщо це дійсно переповнення квоти
+        if (e.name === 'QuotaExceededError' || e.code === 22) {
+            alert("Пам'ять LocalStorage переповнена! Видаліть старі треки або зменште кількість полів.");
+        }
     }
 }
+
+
 
 
 function deleteShape(id) {
@@ -726,41 +974,56 @@ function generateLines() {
 
 function toggleLiveTracking() {
     const trackBtn = document.getElementById('trackBtn');
-    isTrackingActive = !isTrackingActive; // Перемикаємо режим
+    isTrackingActive = !isTrackingActive;
 
     if (isTrackingActive) {
         trackBtn.classList.add('active');
         trackBtn.innerText = "🛰️";
+
+        // КЛЮЧОВИЙ МОМЕНТ: Сигналимо, що наступна точка — це новий сегмент
+        isNewSegmentStarting = true;
+
         if (lastLocation) map.panTo([lastLocation.lat, lastLocation.lng]);
     } else {
         trackBtn.classList.remove('active');
         trackBtn.innerText = "📍";
+
+        // При вимкненні також корисно скинути стан
+        isNewSegmentStarting = false;
     }
 }
 
 
 function renderTrack() {
-    // 1. Очищуємо старий трек з карти
+    // 1. Очищуємо старий трек (групу шарів) з карти
     if (trackLayer) {
         map.removeLayer(trackLayer);
-        trackLayer = null;
     }
+
+    // Створюємо нову групу для всіх сегментів треку
+    trackLayer = L.layerGroup().addTo(map);
 
     // 2. Шукаємо активне поле
     const activeShape = shapes.find(s => s.id === activeShapeId);
 
-    // 3. Малюємо, якщо є точки
-    if (activeShape && activeShape.trackPoints && activeShape.trackPoints.length > 1) {
-        trackLayer = L.polyline(activeShape.trackPoints, {
-            color: '#d3a31f',      // ВАШ НОВИЙ КОЛІР
-            weight: getTrackWeight(),
-            opacity: 0.6,          // Трохи збільшив прозорість для кращої видимості
-            lineCap: 'round',
-            lineJoin: 'round',
-            interactive: false
-        }).addTo(map);
+    // 3. Малюємо кожен сегмент окремо
+    if (activeShape && activeShape.trackSegments && activeShape.trackSegments.length > 0) {
+        activeShape.trackSegments.forEach(segment => {
+            // Малюємо лінію, тільки якщо в сегменті хоча б 2 точки
+            if (segment.length > 1) {
+                L.polyline(segment, {
+                    color: '#d3a31f',
+                    weight: getTrackWeight(),
+                    opacity: 0.6,
+                    lineCap: 'round',
+                    lineJoin: 'round',
+                    interactive: false
+                }).addTo(trackLayer);
+            }
+        });
     }
 }
+
 
 
 
@@ -809,6 +1072,23 @@ function deleteLines() {
     }
 }
 
+function exportSingleShape(id) {
+    const shape = shapes.find(s => s.id === id);
+    if (!shape) return alert("Поле не знайдено");
+
+    // Створюємо масив з одним об'єктом, щоб зберегти сумісність з форматом імпорту
+    const dataStr = JSON.stringify([shape], null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+
+    const fileName = `Field_${shape.name || 'unnamed'}_${new Date().toISOString().slice(0, 10)}.json`;
+
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', fileName);
+    linkElement.click();
+}
+
+
 // --- ЕКСПОРТ У ФАЙЛ ---
 function exportData() {
     if (shapes.length === 0) return alert("Немає даних для експорту");
@@ -824,7 +1104,7 @@ function exportData() {
     linkElement.click();
 }
 
-// --- ІМПОРТ З ФАЙЛУ ---
+
 function importData(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -832,28 +1112,42 @@ function importData(event) {
     const reader = new FileReader();
     reader.onload = function (e) {
         try {
-            const importedShapes = JSON.parse(e.target.result);
+            const importedData = JSON.parse(e.target.result);
+            // Перетворюємо в масив, навіть якщо у файлі один об'єкт
+            const newShapes = Array.isArray(importedData) ? importedData : [importedData];
 
-            if (Array.isArray(importedShapes)) {
-                if (confirm("Замінити поточні дані імпортованими?")) {
-                    shapes = importedShapes;
-                    saveData();
-                    renderShapes();
-                    updateUI();
-                    alert("Дані успішно імпортовано!");
+            newShapes.forEach(newShape => {
+                // Перевіряємо, чи немає вже поля з таким ID
+                const isDuplicate = shapes.some(s => s.id === newShape.id);
+
+                if (isDuplicate) {
+                    // Якщо ID вже існує, створюємо новий унікальний ID
+                    newShape.id = Date.now().toString() + '-' + Math.floor(Math.random() * 1000);
+                    newShape.name = (newShape.name || "Поле") + " (копія)";
                 }
-            } else {
-                alert("Некоректний формат файлу");
-            }
+
+                // Додаємо поле в загальний масив
+                shapes.push(newShape);
+            });
+
+            // Зберігаємо оновлений масив у LocalStorage
+            saveData();
+            // Оновлюємо інтерфейс
+            renderShapes();
+            if (typeof updateUI === 'function') updateUI();
+
+            alert(`Успішно додано полів: ${newShapes.length}`);
+
         } catch (err) {
-            alert("Помилка при читанні файлу");
+            alert("Помилка: файл має некоректний формат JSON");
             console.error(err);
         }
     };
     reader.readAsText(file);
-    // Очищуємо інпут, щоб можна було вибрати той самий файл двічі
+    // Очищуємо поле вибору файлу
     event.target.value = '';
 }
+
 
 function toggleSidebar() {
     const sidebar = document.getElementById('sidebar');
@@ -862,30 +1156,68 @@ function toggleSidebar() {
 
 function clearTrack() {
     const activeShape = shapes.find(s => s.id === activeShapeId);
+
     if (activeShape && confirm("Видалити намальований шлях для цього поля?")) {
-        activeShape.trackPoints = [];
-        if (trackLayer) map.removeLayer(trackLayer);
-        trackLayer = null;
+        // 1. Очищаємо нову структуру сегментів
+        activeShape.trackSegments = [];
+
+        // 2. На всякий випадок очищаємо і старий масив, якщо він був
+        if (activeShape.trackPoints) activeShape.trackPoints = [];
+
+        // 3. Очищаємо візуалізацію з карти
+        if (trackLayer) {
+            // Якщо trackLayer це L.layerGroup, clearLayers() видалить усі лінії відразу
+            if (typeof trackLayer.clearLayers === 'function') {
+                trackLayer.clearLayers();
+            } else {
+                map.removeLayer(trackLayer);
+                trackLayer = null;
+            }
+        }
+
+        // 4. Зберігаємо зміни та оновлюємо UI
         saveData();
-        alert("Трек очищено");
+
+        // Якщо у вас є функція оновлення статистики (га), варто викликати її тут
+        if (typeof updateCompletedStats === 'function') updateCompletedStats();
+
+        // alert("Трек очищено");
     }
+    updateTrackStats();
 }
 
 function getTrackWeight() {
     const spacing = parseFloat(document.getElementById('lineSpacing').value) || 10;
-    // Розрахунок: скільки пікселів займає 1 метр при поточному зумі
-    const centerLatLng = map.getCenter();
-    const pointC = map.latLngToContainerPoint(centerLatLng);
-    const pointDest = map.unproject(map.project(centerLatLng).add([0, 100])); // 100 пікселів вниз
-    const distanceInMeters = centerLatLng.distanceTo(pointDest);
-    const pixelsPerMeter = 100 / distanceInMeters;
+    const center = map.getCenter();
 
-    return spacing * pixelsPerMeter;
+    // Створюємо точку поруч (на 0.001 градуса широти вище)
+    const offsetLatLng = L.latLng(center.lat + 0.001, center.lng);
+
+    // Рахуємо реальну відстань у метрах між цими точками
+    const distanceMeters = center.distanceTo(offsetLatLng);
+
+    // Рахуємо відстань у пікселях на екрані
+    const p1 = map.latLngToLayerPoint(center);
+    const p2 = map.latLngToLayerPoint(offsetLatLng);
+    const distancePixels = p1.distanceTo(p2);
+
+    // Коефіцієнт: скільки пікселів в одному метрі
+    const pixelsPerMeter = distancePixels / distanceMeters;
+
+    // Повертаємо ширину в пікселях (мінімум 1 піксель, щоб не зникав)
+    return Math.max(spacing * pixelsPerMeter, 1);
 }
 
 map.on('zoomend', () => {
     if (trackLayer) {
-        trackLayer.setStyle({ weight: getTrackWeight() });
+        const newWeight = getTrackWeight();
+
+        // Перебираємо всі лінії всередині групи і оновлюємо кожну
+        trackLayer.eachLayer((layer) => {
+            if (layer instanceof L.Polyline) {
+                layer.setStyle({ weight: newWeight });
+            }
+        });
     }
 });
 
@@ -934,30 +1266,48 @@ function startGlobalGPS() {
             if (isTrackingActive) {
                 const activeShape = shapes.find(s => s.id === activeShapeId);
                 if (activeShape) {
-                    // --- 1. ЗАПИС ТРЕКУ (Ваш існуючий код) ---
-                    if (!activeShape.trackPoints) activeShape.trackPoints = [];
-                    const newPoint = [lat, lng];
-                    let shouldAdd = false;
-                    if (activeShape.trackPoints.length === 0) {
-                        shouldAdd = true;
-                    } else {
-                        const lastP = activeShape.trackPoints[activeShape.trackPoints.length - 1];
-                        const dist = turf.distance(turf.point([lastP[1], lastP[0]]), turf.point([lng, lat]), { units: 'meters' });
-                        if (dist > 5) shouldAdd = true;
-                    }
-                    if (shouldAdd) {
-                        activeShape.trackPoints.push(newPoint);
-                        renderTrack();
-                        saveData();
+                    // 1. Ініціалізація структури сегментів
+                    if (!activeShape.trackSegments) activeShape.trackSegments = [];
+
+                    // 2. Створення нового сегмента при старті стеження
+                    if (isNewSegmentStarting || activeShape.trackSegments.length === 0) {
+                        activeShape.trackSegments.push([]);
+                        isNewSegmentStarting = false; // Важливо: скидаємо прапорець
                     }
 
-                    // --- 2. АВТОМАТИЧНЕ ЗАФАРБОВУВАННЯ (Додаємо сюди) ---
+                    // Отримуємо посилання на поточний (останній) сегмент
+                    const currentSegments = activeShape.trackSegments;
+                    const currentSegment = currentSegments[currentSegments.length - 1];
+                    const newPoint = [lat, lng];
+
+                    // 3. Перевірка на додавання точки (мінімум 5 метрів від попередньої)
+                    let shouldAdd = false;
+                    if (currentSegment.length === 0) {
+                        shouldAdd = true;
+                    } else {
+                        const lastP = currentSegment[currentSegment.length - 1];
+                        // Turf очікує [lng, lat], тому беремо індекси [1] та [0]
+                        const from = turf.point([lastP[1], lastP[0]]);
+                        const to = turf.point([lng, lat]);
+                        const dist = turf.distance(from, to, { units: 'meters' });
+
+                        if (dist > 5) shouldAdd = true;
+                    }
+
+                    if (shouldAdd) {
+                        currentSegment.push(newPoint);
+                        renderTrack(); // Малює всі сегменти окремими лініями
+                        saveData();
+                        updateTrackStats();
+                    }
+
+                    // --- 4. АВТОМАТИЧНЕ ЗАФАРБОВУВАННЯ ---
                     if (activeShape.internalStrips) {
                         const myPos = turf.point([lng, lat]);
                         const trackWidth = parseFloat(document.getElementById('lineSpacing').value) || 10;
 
                         activeShape.internalStrips.forEach((stripCoords, index) => {
-                            if (activeShape.completedStrips[index]) return;
+                            if (activeShape.completedStrips && activeShape.completedStrips[index]) return;
 
                             if (!sessionProgress[index]) {
                                 sessionProgress[index] = {
@@ -971,7 +1321,6 @@ function startGlobalGPS() {
                             data.points.forEach((cp, i) => {
                                 if (!data.hits[i]) {
                                     const dist = turf.distance(myPos, turf.point(cp), { units: 'meters' });
-                                    // Реєструємо "влучання", якщо ми в радіусі 70% від ширини захвату
                                     if (dist < (trackWidth * 0.7)) {
                                         data.hits[i] = true;
                                         data.hitCount++;
@@ -980,17 +1329,21 @@ function startGlobalGPS() {
                             });
 
                             if (data.hitCount >= 7) {
+                                if (!activeShape.completedStrips) activeShape.completedStrips = {};
                                 activeShape.completedStrips[index] = true;
                                 delete sessionProgress[index];
-                                updateUI(); // Оновлюємо карту, щоб смуга стала зеленою
-                                updateCompletedStats(); // Оновлюємо га
+
+                                if (typeof updateUI === 'function') updateUI();
+                                if (typeof updateCompletedStats === 'function') updateCompletedStats();
                                 saveData();
                             }
                         });
                     }
                 }
+                // Плавно переміщуємо камеру за маркером
                 map.panTo([lat, lng]);
             }
+
 
 
             lastLocation = { lat, lng };
@@ -1015,3 +1368,83 @@ function getControlPoints(stripCoords) {
         return points;
     } catch (e) { return []; }
 }
+
+function updateTrackStats() {
+    if (trackCalcTimeout) clearTimeout(trackCalcTimeout);
+
+    trackCalcTimeout = setTimeout(() => {
+        const activeShape = shapes.find(s => s.id === activeShapeId);
+        const trackAreaEl = document.getElementById('trackArea');
+
+        if (!activeShape || !activeShape.trackSegments || activeShape.trackSegments.length === 0) {
+            if (trackAreaEl) trackAreaEl.innerText = "0.0000 га";
+            return;
+        }
+
+        try {
+            const trackWidth = parseFloat(document.getElementById('lineSpacing').value) || 10;
+
+            // 1. Отримуємо координати з вашого масиву 'points'
+            if (!activeShape.points || activeShape.points.length < 3) {
+                console.error("Недостатньо точок у полі для розрахунку");
+                return;
+            }
+
+            // Перетворюємо {lat, lng} у [lng, lat]
+            let coords = activeShape.points.map(p => [p.lng, p.lat]);
+
+            // 2. Важливо: Turf вимагає, щоб перша і остання точки збігалися
+            if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
+                coords.push([coords[0][0], coords[0][1]]);
+            }
+
+            // Створюємо полігон (масив має бути загорнутий у ще один масив)
+            const fieldPoly = turf.polygon([coords]);
+
+            let features = [];
+
+            // 3. Обробляємо треки
+            activeShape.trackSegments.forEach(segment => {
+                if (segment.length < 2) return;
+
+                // Перевертаємо точки треку [lat, lng] -> [lng, lat]
+                const lineCoords = segment.map(p => [p[1], p[0]]);
+                let line = turf.lineString(lineCoords);
+
+                // Спрощуємо для швидкості
+                line = turf.simplify(line, { tolerance: 0.00001, highQuality: false });
+
+                const buffer = turf.buffer(line, trackWidth / 2, { units: 'meters' });
+                if (buffer) features.push(buffer);
+            });
+
+            if (features.length === 0) return;
+
+            // 4. Об'єднуємо треки та шукаємо перетин із полем
+            const combinedTrack = turf.union(turf.featureCollection(features));
+            if (!combinedTrack) return;
+
+            const intersection = turf.intersect(turf.featureCollection([combinedTrack, fieldPoly]));
+
+            if (intersection) {
+                const areaHa = turf.area(intersection) / 10000;
+                trackAreaEl.innerText = areaHa.toFixed(4) + " га";
+            } else {
+                trackAreaEl.innerText = "0.0000 га";
+            }
+        } catch (e) {
+            console.warn("Помилка обробки геометрії:", e.message);
+        }
+    }, 1000);
+}
+
+
+
+
+
+
+
+
+
+
+

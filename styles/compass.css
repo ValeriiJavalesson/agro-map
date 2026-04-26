@@ -1,0 +1,63 @@
+.dark-compass {
+    position: fixed;
+    top: 20px;
+    left: 320px;
+    z-index: 1001;
+    width: 46px;
+    height: 46px;
+    background: #1a1a1a;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    cursor: pointer;
+    border: 1px solid #333;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    -webkit-user-select: none;
+    
+    outline: none; /* Прибирає контур фокусу */
+}
+
+/* ОСНОВНИЙ ЕЛЕМЕНТ - ЦЕНТРАЛЬНА ЦЯТКА (ВІСЬ) */
+.compass-axis {
+    position: relative;
+    width: 6px;
+    height: 6px;
+    background: #1a1a1a; /* Колір як у фона */
+    border: 1.5px solid #f0f0f0; /* Світла обводка, щоб її було видно */
+    border-radius: 50%;
+    z-index: 10;
+    box-sizing: border-box; /* Щоб обводка не збільшувала розмір */
+}
+
+/* ЧЕРВОНА СТРІЛКА (ВЕРХ) */
+.compass-axis::before {
+    content: '';
+    position: absolute;
+    bottom: 2px; /* Трохи "втоплюємо" в центр цятки */
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-bottom: 18px solid #ff4d4d;
+    z-index: -1; /* Ховаємо під цятку */
+}
+
+/* СІРА СТРІЛКА (НИЗ) */
+.compass-axis::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 18px solid #f0f0f0;
+    z-index: -1; /* Ховаємо під цятку */
+}

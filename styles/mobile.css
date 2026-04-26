@@ -1,0 +1,363 @@
+@import "compass-mobile.css";
+
+body,
+html {
+    margin: 0;
+    padding: 0;
+    width: 100vw;
+    height: 100dvh;
+    overflow: hidden;
+    background: #1a1a1a;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+#map {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+/* 2. SIDEBAR (ШТОРКА ЗНИЗУ) */
+#sidebar {
+    position: fixed;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    width: 65vw;
+    background: #1a252f;
+    z-index: 2000;
+    border-radius: 20px 20px 0 0;
+    box-shadow: 0 -5px 25px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s ease;
+    transform: translateY(0);
+    font-size: 3vh;
+    text-align: center;
+}
+
+.sidebar-header>h3 {
+    display: none;
+}
+
+.sidebar-header span {
+    position: sticky;
+    right: 3px;
+    cursor: pointer;
+    font-size: 6vh;
+    background-color: #7a0000;
+    border-radius: 2vh;
+    width: 31%;
+    display: block;
+    right: auto;
+    margin: auto 0 10px auto;
+    height: 9vh;
+}
+
+
+#sidebar.list-active {
+    height: 60vh;
+}
+
+#sidebar.edit-active {
+    height: 18vh;
+    min-height: 130px;
+}
+
+#sidebar.hidden {
+    transform: translateY(100%);
+}
+
+/* 3. КНОПКИ ПОВЕРХ КАРТИ */
+#menuBtn {
+    position: fixed;
+    bottom: 25px;
+    left: 20px;
+    z-index: 1500;
+    width: 10vh;
+    height: 10vh;
+    background: #2c3e50;
+    color: white;
+    border-radius: 50%;
+    font-size: 6vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+    border: 2px solid #34495e;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.map-overlay-btn {
+    position: fixed;
+    right: 15px;
+    width: 160px;
+    height: 160px;
+    background: #1a1a1a;
+    color: white;
+    border: 2px solid #333;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 50px;
+    z-index: 1000;
+    top: 1vh !important;
+
+    /* Над компактною шторкою */
+}
+
+.map-overlay-btn.btn-track-map {
+    top: 11vh !important;
+}
+
+.btn-layer {
+    bottom: 31vh !important;
+}
+
+
+
+.map-overlay-info {
+    position: fixed;
+    right: auto;
+    top: 1vh;
+    left: 38%;
+    width: 24%;
+    height: 7vh;
+    background: rgba(0, 0, 0, 0.9);
+    border: 2px solid #2ecc71;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+#speedValue {
+    font-size: 5vh;
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+/* 4. СПИСОК ПОЛІВ (view-list) */
+.sidebar-header {
+    padding: 22px 34px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 5px;
+}
+
+.header-actions button {
+    height: 6vh;
+    border-radius: 8px;
+    border: none;
+    font-size: 3vh;
+}
+
+.btn-add {
+    flex: 3;
+    background: #3498db;
+    color: white;
+}
+
+.btn-import {
+    flex: 1;
+    background: #2ecc71;
+    color: white;
+}
+
+.btn-export-all {
+    flex: 1;
+    background: #269681;
+    color: white;
+}
+
+#shapes-list {
+    flex-grow: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+.shape-btn {
+    width: 100%;
+    padding: 16px 15px;
+    border: none;
+    border-bottom: 1px solid #34495e;
+    background: transparent;
+    display: flex;
+    align-items: center;
+}
+
+.color-indicator {
+    width: 2vh;
+    height: 2vh;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.8);
+    margin-right: 12px;
+    display: inline-block;
+}
+
+/* 5. РЕЖИМ РЕДАГУВАННЯ (view-edit) */
+.edit-controls {
+    padding: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Компактний режим (edit-active) */
+.edit-active .edit-controls {
+    display: grid !important;
+    grid-template-columns: 1.1fr 1fr 40px 0.7fr;
+    align-items: center;
+    gap: 8px;
+    padding: 10px;
+}
+
+.edit-active .field-stats-card {
+    background: transparent;
+    border-left: 4px solid #3498db;
+    padding: 0 0 0 8px;
+    margin: 0;
+}
+
+.edit-active .stat-row {
+    font-size: 11px;
+    margin-bottom: 2px;
+}
+
+.edit-active .stat-row b {
+    font-size: 13px;
+}
+
+.edit-active .line-settings {
+    display: flex !important;
+    flex-direction: row;
+    align-items: center;
+    background: transparent;
+    padding: 0;
+    gap: 0;
+}
+
+.edit-active .line-inputs-wrapper {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.edit-active .input-mini-group {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+}
+
+.edit-active .input-mini-group label {
+    font-size: 9px;
+    text-transform: uppercase;
+    display: block !important;
+}
+
+.edit-active .input-mini-group input {
+    width: 45px;
+    height: 25px;
+    font-size: 13px;
+    text-align: center;
+    color: #1a252f !important;
+    background: white;
+}
+
+.edit-active .btn-refresh-lines {
+    display: flex !important;
+    background: #3498db;
+    color: white;
+    width: 35px;
+    height: 35px;
+    border-radius: 6px;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    border: none;
+}
+
+.edit-active .actions-grid {
+    display: flex !important;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.edit-active .actions-grid button {
+    height: 32px;
+    min-height: 32px;
+    font-size: 10px;
+    padding: 0 4px;
+}
+
+/* Ховаємо зайве в компактному режимі */
+.edit-active #shapeNameInput,
+.edit-active .input-group,
+.edit-active #editingFieldName,
+.edit-active .btn-danger-outline:not(#lockBtn),
+.edit-active .btn-primary:not(.btn-refresh-lines) {
+    display: none !important;
+}
+
+/* 6. ШРИФТИ ТА КОНТРАСТ */
+#sidebar,
+#sidebar h3,
+#sidebar span,
+#sidebar label,
+.stat-row span,
+.shape-name,
+.shape-btn {
+    color: #ffffff !important;
+}
+
+.shape-name {
+    font-size: 4vh;
+}
+
+.stat-row b {
+    color: #2ecc71 !important;
+    text-shadow: 1px 1px 2px #000;
+}
+
+input {
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    padding: 8px;
+}
+
+/* 7. ТЕХНІЧНІ ФІКСИ */
+button {
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
+}
+
+.leaflet-svg-layer,
+.leaflet-zoom-wrapper,
+.leaflet-canvas-layer {
+    transition: none !important;
+    backface-visibility: hidden;
+}
+
+.arrow-icon {
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-bottom: 32px solid #3498db;
+    filter: drop-shadow(0 0 2px white);
+}
+
+.dot {
+    width: 28px;
+    height: 28px;
+    border: 3px solid white;
+    background: #3498db;
+    border-radius: 50%;
+}

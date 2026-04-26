@@ -1,4 +1,4 @@
-/* Базові налаштування */
+@import "compass.css";
 body,
 html {
     margin: 0;
@@ -32,6 +32,13 @@ body {
     max-height: calc(100vh - 40px);
     transition: transform 0.3s ease;
     /* Анімація ховання */
+}
+.sidebar-header span{
+    position: absolute;
+    right: 10px;
+    top: 10px;
+    cursor: pointer;
+    font-size: 27px;
 }
 
 #sidebar.hidden {
@@ -346,10 +353,27 @@ input::-webkit-inner-spin-button {
     font-weight: bold;
     cursor: pointer;
     transition: background 0.3s;
+    background-color: #3498db;
+    color: white;
 }
 
 .btn-add:hover {
     background: #2ecc71;
+}
+
+.btn-add {
+    background-color: #3498db;
+    color: white;
+}
+
+.btn-import {
+    background-color: #2ecc71;
+    color: white;
+}
+
+.btn-export-all {
+    background-color: #269681;
+    color: white;
 }
 
 .location-arrow {
@@ -402,4 +426,19 @@ input::-webkit-inner-spin-button {
     font-weight: bold;
     letter-spacing: -1px;
     /* Щоб цифри стояли щільніше */
+}
+
+/* Забороняємо Leaflet масштабувати вектори як статичну картинку */
+.leaflet-zoom-animated g {
+    display: block !important;
+}
+
+.leaflet-svg-layer {
+    /* Прибираємо будь-яку вбудовану затримку трансформації */
+    transition: none !important;
+}
+
+/* Прибираємо "скакання" під час зуму */
+.leaflet-zoom-wrapper {
+    transition: none !important;
 }
