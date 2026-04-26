@@ -14,7 +14,9 @@ body {
     height: 100vh;
     overflow: hidden;
 }
-
+#edit-field-button{
+    display: none;
+}
 /* Бічна панель */
 #sidebar {
     position: absolute;

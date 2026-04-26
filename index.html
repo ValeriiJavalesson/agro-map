@@ -103,43 +103,47 @@
                         <b id="trackArea" style="color: #d3a31f;">0.0000 га</b>
                     </div>
                 </div>
-
-                <div class="input-group">
-                    <label>Назва поля:</label>
-                    <input type="text" id="shapeNameInput" oninput="updateActiveShapeName(this.value)">
-                </div>
-
-                <div class="line-settings">
-                    <div class="line-inputs-wrapper">
-                        <div class="input-mini-group">
-                            <label>Колія:</label>
-                            <input type="number" id="lineSpacing" value="10" step="0.1" onchange="saveLineParams()">
-                        </div>
-                        <div class="input-mini-group">
-                            <label>Зсув:</label>
-                            <input type="number" id="startOffset" value="0" step="0.1" onchange="saveLineParams()">
-                        </div>
+                <div><button id="edit-field-button" onclick="toggleEditField()">✏️</button></div>
+                <div class="edit-field hidden">
+                    <div class="input-group">
+                        <label>Назва поля:</label>
+                        <input type="text" id="shapeNameInput" oninput="updateActiveShapeName(this.value)">
                     </div>
-                    <!-- Маленька кнопка швидкого оновлення -->
-                    <button onclick="generateLines()" class="btn-refresh-lines" title="Оновити колії">↻</button>
+
+                    <div class="line-settings">
+                        <div class="line-inputs-wrapper">
+                            <div class="input-mini-group">
+                                <label>Колія:</label>
+                                <input type="number" id="lineSpacing" value="10" step="0.1" onchange="saveLineParams()">
+                            </div>
+                            <div class="input-mini-group">
+                                <label>Зсув:</label>
+                                <input type="number" id="startOffset" value="0" step="0.1" onchange="saveLineParams()">
+                            </div>
+                        </div>                        
+                    </div>
+
+                    <div style="display: flex; gap: 8px;">
+                        <button onclick="generateLines()" class="btn-primary" style="flex: 2;">Побудувати ☰</button>
+                        <button onclick="deleteLines()" class="btn-danger" style="flex: 1;"
+                            title="Видалити колії">✕</button>
+                    </div>
+                    <button onclick="clearTrack()" class="btn-danger-outline" style="width: 100%; margin-top: 8px;">🧹
+                        Очистити намальований трек</button>
+
+                    <div class="actions-grid">
+                        <button onclick="toggleLock()" id="lockBtn">🔓 Редагувати</button>
+                        <button onclick="focusOnShape()">🎯 Центрувати</button>
+                        <button onclick="deleteActiveShape()" class="btn-danger-outline"
+                            style="grid-column: span 2;">🗑️
+                            Видалити все поле</button>
+
+                    </div>
+                    <button onclick="exportSingleShape(activeShapeId)" class="btn-primary-outline">📤 Експорт
+                        поля</button>
+
                 </div>
 
-                <div style="display: flex; gap: 8px;">
-                    <button onclick="generateLines()" class="btn-primary" style="flex: 2;">Побудувати ☰</button>
-                    <button onclick="deleteLines()" class="btn-danger" style="flex: 1;"
-                        title="Видалити колії">✕</button>
-                </div>
-                <button onclick="clearTrack()" class="btn-danger-outline" style="width: 100%; margin-top: 8px;">🧹
-                    Очистити намальований трек</button>
-
-                <div class="actions-grid">
-                    <button onclick="toggleLock()" id="lockBtn">🔓 Редагувати</button>
-                    <button onclick="focusOnShape()">🎯 Центрувати</button>
-                    <button onclick="deleteActiveShape()" class="btn-danger-outline" style="grid-column: span 2;">🗑️
-                        Видалити все поле</button>
-
-                </div><button onclick="exportSingleShape(activeShapeId)" class="btn-primary-outline">📤 Експорт
-                    поля</button>
             </div>
 
         </div>

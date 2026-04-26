@@ -1438,7 +1438,10 @@ function updateTrackStats() {
     }, 1000);
 }
 
-
+function toggleEditField(){
+    const editField = document.getElementsByClassName('edit-field')[0];
+    editField.classList.toggle('hidden');
+}
 
 
 

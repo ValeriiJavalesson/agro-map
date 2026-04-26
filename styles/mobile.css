@@ -1,5 +1,6 @@
 @import "compass-mobile.css";
 
+
 body,
 html {
     margin: 0;
@@ -9,6 +10,10 @@ html {
     overflow: hidden;
     background: #1a1a1a;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+}
+
+.hidden {
+    display: none;
 }
 
 #map {
@@ -26,7 +31,7 @@ html {
     top: auto;
     bottom: 0;
     left: 0;
-    width: 65vw;
+    width: 100vw;
     background: #1a252f;
     z-index: 2000;
     border-radius: 20px 20px 0 0;
@@ -35,7 +40,7 @@ html {
     flex-direction: column;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), height 0.3s ease;
     transform: translateY(0);
-    font-size: 3vh;
+    font-size: 4vh;
     text-align: center;
 }
 
@@ -63,7 +68,7 @@ html {
 }
 
 #sidebar.edit-active {
-    height: 18vh;
+    height: 26vh;
     min-height: 130px;
 }
 
@@ -213,11 +218,12 @@ html {
 
 /* Компактний режим (edit-active) */
 .edit-active .edit-controls {
-    display: grid !important;
-    grid-template-columns: 1.1fr 1fr 40px 0.7fr;
-    align-items: center;
     gap: 8px;
     padding: 10px;
+    display: flex;
+    flex-direction: row;
+    justify-content: space-around;
+    position: fixed;
 }
 
 .edit-active .field-stats-card {
@@ -228,12 +234,12 @@ html {
 }
 
 .edit-active .stat-row {
-    font-size: 11px;
+    font-size: 2.2vh;
     margin-bottom: 2px;
 }
 
 .edit-active .stat-row b {
-    font-size: 13px;
+    font-size: 2.2vh;
 }
 
 .edit-active .line-settings {
@@ -247,7 +253,7 @@ html {
 
 .edit-active .line-inputs-wrapper {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
     gap: 4px;
 }
 
@@ -259,15 +265,16 @@ html {
 }
 
 .edit-active .input-mini-group label {
-    font-size: 9px;
+    font-size: 3vh;
     text-transform: uppercase;
     display: block !important;
+    margin-left: 2vh;
 }
 
 .edit-active .input-mini-group input {
-    width: 45px;
-    height: 25px;
-    font-size: 13px;
+    width: 21vw;
+    height: 4vh;
+    font-size: 3vh;
     text-align: center;
     color: #1a252f !important;
     background: white;
@@ -293,20 +300,25 @@ html {
 }
 
 .edit-active .actions-grid button {
-    height: 32px;
-    min-height: 32px;
-    font-size: 10px;
-    padding: 0 4px;
+    height: 6vh;
+    /* min-height: 35px; */
+    font-size: 3vh;
+    padding: 0vh 0vh;
+}
+
+#shapeNameInput {
+    font-size: 3vh;
+    width: 70%;
 }
 
 /* Ховаємо зайве в компактному режимі */
-.edit-active #shapeNameInput,
+/* .edit-active #shapeNameInput,
 .edit-active .input-group,
 .edit-active #editingFieldName,
 .edit-active .btn-danger-outline:not(#lockBtn),
 .edit-active .btn-primary:not(.btn-refresh-lines) {
     display: none !important;
-}
+} */
 
 /* 6. ШРИФТИ ТА КОНТРАСТ */
 #sidebar,
@@ -329,15 +341,16 @@ html {
 }
 
 input {
-    border-radius: 8px;
+    border-radius: 12px;
     border: 1px solid #ccc;
-    padding: 8px;
+    padding: 0px;
 }
 
 /* 7. ТЕХНІЧНІ ФІКСИ */
 button {
     -webkit-tap-highlight-color: transparent;
     cursor: pointer;
+    font-size: 3vh;
 }
 
 .leaflet-svg-layer,
@@ -360,4 +373,22 @@ button {
     border: 3px solid white;
     background: #3498db;
     border-radius: 50%;
+}
+
+#edit-field-button {
+    display: block;
+    height: 8vh;
+    width: 8vh;
+    background-color: #dfd7fa4a;
+    border-radius: 3vh;
+    border: none;
+}
+
+.edit-field {
+    position: absolute;
+    background-color: #0d1611;
+    top: -59vh;
+    left: 1vh;
+    width: 50vh;
+    height: 50vh;
 }
