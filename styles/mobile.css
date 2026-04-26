@@ -42,7 +42,6 @@ html {
     transform: translateY(0);
     font-size: 4vh;
     text-align: center;
-    overflow-y: scroll;
 }
 
 .sidebar-header>h3 {
@@ -184,11 +183,11 @@ html {
     color: white;
 }
 
-/* #shapes-list {
+#shapes-list {
     flex-grow: 1;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-} */
+}
 
 .shape-btn {
     width: 100%;
