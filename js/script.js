@@ -72,6 +72,7 @@ const map = L.map('map', {
 });
 renderShapes();
 
+
 // Функція миттєвого перемальовування
 function forceSyncVectors() {
     if (map.renderer && map.renderer._update) {
@@ -229,6 +230,11 @@ function init() {
         trackBtn.disabled = true;
         trackBtn.setAttribute('disabled', 'disabled');
         trackBtn.style.opacity = "0.5";
+    }
+    if (map) {
+        setTimeout(() => {
+            map.invalidateSize({ animate: true });
+        }, 200); // невелика затримка, щоб браузер встиг відрендерити layout
     }
 }
 
