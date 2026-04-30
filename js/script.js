@@ -22,6 +22,8 @@ let isNewSegmentStarting = false;
 
 const colorPicker = document.getElementById('colorPicker');
 
+let isRotateMode = false;
+
 
 // Константи шарів (карта та супутник)
 // 1. Звичайна карта (OpenStreetMap)
@@ -71,7 +73,6 @@ const map = L.map('map', {
     layers: [currentLayerType === 'satellite' ? satelliteLayer : streetLayer]
 });
 renderShapes();
-
 
 // Функція миттєвого перемальовування
 function forceSyncVectors() {
@@ -164,6 +165,38 @@ function resetNorth() {
         }
     }
 
+    requestAnimationFrame(animate);
+}
+
+let currentAnimateBearing = 0;
+let rotationRequestIdx = 0;
+function smoothRotate(targetBearing) {
+    if (typeof map.setBearing !== 'function') return;
+
+    let startBearing = map.getBearing();
+    // Обчислюємо найкоротший шлях до цілі (щоб не крутитись на 350 градусів)
+    let diff = (targetBearing - startBearing + 540) % 360 - 180;
+
+    if (Math.abs(diff) < 0.1) return; // Якщо різниця мізерна — не смикаємо
+
+    const duration = 600; // Трохи швидше, ніж скидання на північ
+    const startTime = performance.now();
+    const requestId = ++rotationRequestIdx; // Щоб нові анімації зупиняли старі
+
+    function animate(currentTime) {
+        if (requestId !== rotationRequestIdx) return; // Зупиняємо, якщо прийшов новий кут
+
+        const elapsed = currentTime - startTime;
+        const progress = Math.min(elapsed / duration, 1);
+        const ease = 1 - Math.pow(1 - progress, 3);
+
+        const currentBearing = startBearing + (diff * ease);
+        map.setBearing(currentBearing);
+
+        if (progress < 1) {
+            requestAnimationFrame(animate);
+        }
+    }
     requestAnimationFrame(animate);
 }
 
@@ -892,91 +925,157 @@ function toggleLock() {
     }
 }
 
+// function generateLines() {
+//     const shape = shapes.find(s => s.id === activeShapeId);
+//     if (!shape || !shape.points || shape.points.length < 3) return;
+
+//     const spacingMeters = parseFloat(document.getElementById('lineSpacing').value) || 10;
+//     const manualShift = parseFloat(document.getElementById('startOffset').value) || 0;
+
+//     try {
+//         // 1. Створюємо масив координат та ОБОВ'ЯЗКОВО замикаємо його
+//         const coords = shape.points.map(p => [p.lng, p.lat]);
+//         const closedCoords = [...coords, coords[0]]; // Додаємо копію першої точки в кінець
+
+//         const poly = turf.polygon([closedCoords]);
+//         const bbox = turf.bbox(poly);
+
+//         const p1 = turf.point([shape.points[0].lng, shape.points[0].lat]);
+//         const p2 = turf.point([shape.points[1].lng, shape.points[1].lat]);
+//         const bearing = turf.bearing(p1, p2);
+
+//         const diag = turf.distance(
+//             turf.point([bbox[0], bbox[1]]),
+//             turf.point([bbox[2], bbox[3]]),
+//             { units: 'meters' }
+//         );
+
+//         let lines = [];
+
+//         // Функція створення лінії (тепер повертає просту лінію, без обрізки по полю)
+//         function getRawLine(offset) {
+//             const origin = p1;
+//             const shiftedStart = turf.destination(origin, offset, bearing + 90, { units: 'meters' });
+//             const shiftedEnd = turf.destination(shiftedStart, diag * 3, bearing, { units: 'meters' });
+//             const shiftedBack = turf.destination(shiftedStart, -diag * 3, bearing, { units: 'meters' });
+//             return [shiftedBack.geometry.coordinates, shiftedEnd.geometry.coordinates];
+//         }
+
+//         // 1. Генеруємо лінії з великим запасом (diag * 2), щоб покрити все поле + залишки
+//         for (let offset = manualShift - (Math.ceil(diag / spacingMeters) + 1) * spacingMeters;
+//             offset < diag * 2;
+//             offset += spacingMeters) {
+//             lines.push(getRawLine(offset));
+//         }
+//         console.log(`Генерація: створено ${lines.length} базових ліній`);
+//         const strips = [];
+
+//         // 2. Створюємо смуги шляхом перетину "нескінченних" прямокутників із полем
+//         for (let i = 0; i < lines.length - 1; i++) {
+//             const line1 = lines[i];
+//             const line2 = lines[i + 1];
+
+//             // Формуємо прямокутник між двома лініями
+//             const rectangleCoords = [
+//                 line1[0], line1[1],
+//                 line2[1], line2[0],
+//                 line1[0]
+//             ];
+
+//             try {
+//                 const rectanglePoly = turf.polygon([rectangleCoords]);
+
+//                 // ПРАВИЛЬНО: Передаємо масив з двох об'єктів [poly, rectanglePoly]
+//                 const intersected = turf.intersect(turf.featureCollection([poly, rectanglePoly]));
+
+//                 if (intersected) {
+//                     const parts = intersected.geometry.type === 'MultiPolygon'
+//                         ? intersected.geometry.coordinates
+//                         : [intersected.geometry.coordinates];
+
+//                     parts.forEach(coords => strips.push(coords));
+//                 }
+//             } catch (e) {
+//                 console.warn("Помилка обробки сегмента:", i);
+//                 console.log(e);
+//             }
+//         }
+
+//         console.log(`Результат: сформовано ${strips.length} окремих смуг`);
+//         shape.internalStrips = strips;
+//         saveData();
+//         updateUI();
+
+//     } catch (error) {
+//         console.error("Помилка генерації:", error);
+//     }
+// }
 function generateLines() {
     const shape = shapes.find(s => s.id === activeShapeId);
     if (!shape || !shape.points || shape.points.length < 3) return;
 
+    // Отримуємо кут з інтерфейсу (додайте input id="manualAngle")
+    const manualAngle = parseFloat(document.getElementById('manualAngle').value) || 0;
     const spacingMeters = parseFloat(document.getElementById('lineSpacing').value) || 10;
     const manualShift = parseFloat(document.getElementById('startOffset').value) || 0;
 
     try {
-        // 1. Створюємо масив координат та ОБОВ'ЯЗКОВО замикаємо його
         const coords = shape.points.map(p => [p.lng, p.lat]);
-        const closedCoords = [...coords, coords[0]]; // Додаємо копію першої точки в кінець
-
+        const closedCoords = [...coords, coords[0]];
         const poly = turf.polygon([closedCoords]);
         const bbox = turf.bbox(poly);
+        const center = turf.center(poly); // Центр поля — точка опори
 
-        const p1 = turf.point([shape.points[0].lng, shape.points[0].lat]);
-        const p2 = turf.point([shape.points[1].lng, shape.points[1].lat]);
-        const bearing = turf.bearing(p1, p2);
-
+        // Діагональ для гарантованого покриття при будь-якому куті
         const diag = turf.distance(
             turf.point([bbox[0], bbox[1]]),
             turf.point([bbox[2], bbox[3]]),
             { units: 'meters' }
-        );
+        ) * 2;
 
+        const bearing = manualAngle; // Використовуємо заданий кут
         let lines = [];
 
-        // Функція створення лінії (тепер повертає просту лінію, без обрізки по полю)
+        // Функція створення лінії відносно центру
         function getRawLine(offset) {
-            const origin = p1;
-            const shiftedStart = turf.destination(origin, offset, bearing + 90, { units: 'meters' });
-            const shiftedEnd = turf.destination(shiftedStart, diag * 3, bearing, { units: 'meters' });
-            const shiftedBack = turf.destination(shiftedStart, -diag * 3, bearing, { units: 'meters' });
-            return [shiftedBack.geometry.coordinates, shiftedEnd.geometry.coordinates];
+            // Зміщуємося від центру перпендикулярно курсу (bearing + 90)
+            const origin = turf.destination(center, offset, bearing + 90, { units: 'meters' });
+            // Малюємо лінію вперед і назад по курсу
+            const start = turf.destination(origin, -diag, bearing, { units: 'meters' });
+            const end = turf.destination(origin, diag, bearing, { units: 'meters' });
+            return [start.geometry.coordinates, end.geometry.coordinates];
         }
 
-        // 1. Генеруємо лінії з великим запасом (diag * 2), щоб покрити все поле + залишки
-        for (let offset = manualShift - (Math.ceil(diag / spacingMeters) + 1) * spacingMeters;
-            offset < diag * 2;
-            offset += spacingMeters) {
+        // Генеруємо лінії в обидва боки від центру, щоб покрити весь BBox
+        const halfCount = Math.ceil(diag / spacingMeters);
+        for (let i = -halfCount; i <= halfCount; i++) {
+            const offset = (i * spacingMeters) + manualShift;
             lines.push(getRawLine(offset));
         }
-        console.log(`Генерація: створено ${lines.length} базових ліній`);
+
         const strips = [];
-
-        // 2. Створюємо смуги шляхом перетину "нескінченних" прямокутників із полем
         for (let i = 0; i < lines.length - 1; i++) {
-            const line1 = lines[i];
-            const line2 = lines[i + 1];
-
-            // Формуємо прямокутник між двома лініями
-            const rectangleCoords = [
-                line1[0], line1[1],
-                line2[1], line2[0],
-                line1[0]
-            ];
-
+            const rectangleCoords = [lines[i][0], lines[i][1], lines[i + 1][1], lines[i + 1][0], lines[i][0]];
             try {
                 const rectanglePoly = turf.polygon([rectangleCoords]);
-
-                // ПРАВИЛЬНО: Передаємо масив з двох об'єктів [poly, rectanglePoly]
                 const intersected = turf.intersect(turf.featureCollection([poly, rectanglePoly]));
-
                 if (intersected) {
                     const parts = intersected.geometry.type === 'MultiPolygon'
                         ? intersected.geometry.coordinates
                         : [intersected.geometry.coordinates];
-
                     parts.forEach(coords => strips.push(coords));
                 }
-            } catch (e) {
-                console.warn("Помилка обробки сегмента:", i);
-                console.log(e);
-            }
+            } catch (e) { continue; }
         }
 
-        console.log(`Результат: сформовано ${strips.length} окремих смуг`);
         shape.internalStrips = strips;
         saveData();
         updateUI();
-
     } catch (error) {
         console.error("Помилка генерації:", error);
     }
 }
+
 
 function toggleLiveTracking() {
     const trackBtn = document.getElementById('trackBtn');
@@ -1250,23 +1349,85 @@ function startGlobalGPS() {
             }
 
             // 2. ОНОВЛЕННЯ МАРКЕРА (завжди)
+            // let rotation = 0;
+            // if (heading !== null && heading !== undefined) {
+            //     rotation = heading;
+            // } else if (lastLocation) {
+            //     rotation = turf.bearing(turf.point([lastLocation.lng, lastLocation.lat]), turf.point([lng, lat]));
+            // }
+
+            // if (myLocationMarker) map.removeLayer(myLocationMarker);
+            // myLocationMarker = L.layerGroup().addTo(map);
+            // L.circle([lat, lng], { radius: accuracy, weight: 1, color: '#3498db', fillOpacity: 0.1 }).addTo(myLocationMarker);
+            // const arrowIcon = L.divIcon({
+            //     className: 'location-arrow',
+            //     html: `<div class="arrow-icon" style="transform: rotate(${rotation}deg)"></div>`,
+            //     iconSize: [20, 20],
+            //     iconAnchor: [10, 10]
+            // });
+            // L.marker([lat, lng], { icon: arrowIcon }).addTo(myLocationMarker);
+
+            // ... всередині watchPosition ...
+
+            // 1. Визначаємо кут (використовуємо let, щоб можна було змінювати)
+            // 1. Розрахунок кута (Heading)
             let rotation = 0;
-            if (heading !== null && heading !== undefined) {
+            if (heading !== null && heading !== undefined && !isNaN(heading)) {
                 rotation = heading;
             } else if (lastLocation) {
-                rotation = turf.bearing(turf.point([lastLocation.lng, lastLocation.lat]), turf.point([lng, lat]));
+                rotation = turf.bearing(
+                    turf.point([lastLocation.lng, lastLocation.lat]),
+                    turf.point([lng, lat])
+                );
+            }
+            // rotation — це ваш вхідний кут, який зараз іде "не в той бік"
+            let displayDegrees = Math.round((((360 - rotation) % 360) + 360) % 360);
+
+
+            // 2. Оновлення цифр у панелі
+            const headingElement = document.getElementById('headingValue');
+            if (headingElement) {
+                headingElement.textContent = displayDegrees;
             }
 
+            let finalRotation = rotation || 0;
+
+            // 2. Логіка режимів
+            let iconDisplayRotation = isRotateMode ? 0 : finalRotation;
+
+            if (isRotateMode) {
+                smoothRotate(rotation);
+                // Використовуємо panTo для м'якого слідування без зміни зуму
+                map.panTo([lat, lng], { animate: true, duration: 0.8 });
+            }
+
+            // 3. Оновлення маркера (ЗБІЛЬШЕНО ВТРИЧІ)
             if (myLocationMarker) map.removeLayer(myLocationMarker);
             myLocationMarker = L.layerGroup().addTo(map);
-            L.circle([lat, lng], { radius: accuracy, weight: 1, color: '#3498db', fillOpacity: 0.1 }).addTo(myLocationMarker);
-            const arrowIcon = L.divIcon({
-                className: 'location-arrow',
-                html: `<div class="arrow-icon" style="transform: rotate(${rotation}deg)"></div>`,
-                iconSize: [20, 20],
-                iconAnchor: [10, 10]
+
+            const bigArrowIcon = L.divIcon({
+                className: 'location-arrow-container',
+                html: `
+        <div style="transform: rotate(${iconDisplayRotation}deg); width: 96px; height: 96px; display: flex; justify-content: center; align-items: center;">
+            <img src="styles/images/arrow.svg" style="width: 100%; height: 100%; display: block;">
+        </div>`,
+                iconSize: [96, 96],
+                iconAnchor: [48, 48] // Центр іконки 96/2
             });
-            L.marker([lat, lng], { icon: arrowIcon }).addTo(myLocationMarker);
+
+            L.marker([lat, lng], { icon: bigArrowIcon }).addTo(myLocationMarker);
+
+            if (isRotateMode || followModeActive) {
+                // isRotateMode — ваш режим "носом вгору"
+                // followModeActive — якщо у вас є окрема кнопка "Стежити" (📍)
+
+                map.setView([lat, lng], map.getZoom(), {
+                    animate: true,
+                    pan: {
+                        duration: 0.5 // Робить рух карти до трактора плавним
+                    }
+                });
+            }
 
             // 3. ЗАПИС ТРЕКУ ТА КАМЕРА (тільки якщо натиснуто "Стежити")
             if (isTrackingActive) {
@@ -1354,9 +1515,14 @@ function startGlobalGPS() {
 
             lastLocation = { lat, lng };
             lastTimestamp = currentTimestamp;
+            if (isRotateMode && rotation !== undefined) {
+                // rotation — це кут, який ми вже розрахували раніше
+                map.setBearing(rotation);
+            }
         },
         (error) => console.warn(error),
         { enableHighAccuracy: true, maximumAge: 1000, timeout: 10000 }
+
     );
 }
 
@@ -1444,13 +1610,50 @@ function updateTrackStats() {
     }, 1000);
 }
 
-function toggleEditField(){
+function toggleEditField() {
     const editField = document.getElementsByClassName('edit-field')[0];
     editField.classList.toggle('hidden');
 }
 
 
 
+function toggleRotateMode() {
+    isRotateMode = !isRotateMode;
+    const btn = document.getElementById('rotateModeBtn');
+
+    if (isRotateMode) {
+        btn.style.borderColor = '#2ecc71';
+        btn.style.color = '#2ecc71';
+        btn.innerText = '🔼'; // Символ "носом вгору"
+    } else {
+        btn.style.borderColor = '#555';
+        btn.style.color = 'white';
+        btn.innerText = '🧭';
+        map.setBearing(0); // Повертаємо мапу на Північ при вимкненні
+    }
+}
+
+function setAngleFromGPS() {
+    // Беремо відкаліброване значення з вашої панелі (0-359)
+    const currentHeading = document.getElementById('headingValue').textContent;
+    
+    // Перевіряємо, чи є значення і чи воно не нульове (якщо техніка стоїть)
+    if (currentHeading && currentHeading !== "—") {
+        const angleInput = document.getElementById('manualAngle');
+        angleInput.value = currentHeading;
+        
+        // Викликаємо ваші функції збереження та перегенерації
+        saveLineParams(); 
+        if (typeof generateLines === 'function') {
+            generateLines();
+        }
+        
+        // Візуальний ефект успіху (кнопка на мить блимне зеленим)
+        console.log(`Кут встановлено: ${currentHeading}°`);
+    } else {
+        alert("Напрямок не визначений. Почніть рух!");
+    }
+}
 
 
 

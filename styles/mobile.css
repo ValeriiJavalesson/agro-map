@@ -129,12 +129,15 @@ html {
     position: fixed;
     right: auto;
     top: 1vh;
-    left: 38%;
-    width: 24%;
+    left: 50%; /* Центруємо */
+    transform: translateX(-50%); /* Точне вирівнювання по центру */
+    width: auto; /* Дозволяємо ширині підлаштовуватися під контент */
+    min-width: 25%; 
+    padding: 0 20px; /* Відступи всередині */
     height: 7vh;
-    background: rgba(0, 0, 0, 0.9);
+    background: rgba(0, 0, 0, 0.85); /* Трохи прозорості для стилю */
     border: 2px solid #2ecc71;
-    border-radius: 10px;
+    border-radius: 12px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,7 +148,53 @@ html {
     font-size: 5vh;
     color: #2ecc71;
     font-weight: bold;
+    line-height: 1;
+    font-size: 5vh;
+    min-width: 10vh; /* Гарантує місце під цифри */
+    text-align: right;
 }
+
+/* Додаємо відступ між швидкістю та курсом */
+.map-overlay-info {
+    gap: 15px; /* Створює простір між елементами всередині */
+    width: 30vh !important; 
+    padding: 0 10px;
+    box-sizing: border-box;
+}
+.headingContainer{
+    display: flex;
+    align-items: center;
+    width: 15vw;
+}
+/* Стиль для цифр курсу */
+#headingValue {
+    font-size: 4vh; /* Трохи менше за швидкість, щоб не перевантажувати */
+    color: #f1c40f; /* Жовтий колір, щоб візуально відрізнити від швидкості */
+    font-weight: bold;
+}
+.degree-symbol {
+    color: #f1c40f;
+    font-size: 2.5vh;
+    margin-left: 2px;
+    align-self: flex-start; /* Вирівнює символ по верхньому краю контейнера */
+    margin-top: 0.5vh;      /* Тонке налаштування висоти */
+}
+
+/* Одиниця виміру (градуси) */
+.unit-label {
+    font-size: 2vh;
+    color: #bdc3c7;
+    margin-left: 2px;
+}
+
+/* Контейнер для курсу (щоб тримати цифри та градуси разом) */
+.heading-container {
+    display: flex;
+    align-items: baseline;
+    border-left: 1px solid #444; /* Тонка лінія-розділювач */
+    padding-left: 15px;
+}
+
 
 /* 4. СПИСОК ПОЛІВ (view-list) */
 .sidebar-header {
@@ -255,6 +304,7 @@ html {
     display: flex;
     flex-direction: row;
     gap: 4px;
+    flex-wrap: wrap;
 }
 
 .edit-active .input-mini-group {
@@ -278,6 +328,16 @@ html {
     text-align: center;
     color: #1a252f !important;
     background: white;
+}
+
+.degreeBtn{
+        background: #f1c40f;
+    border: none;
+    border-radius: 4px;
+    padding: 0 8px;
+    cursor: pointer;
+    font-size: 1.2rem;
+    width: 17vw;
 }
 
 .edit-active .btn-refresh-lines {
@@ -361,10 +421,33 @@ button {
 }
 
 .arrow-icon {
-    border-left: 12px solid transparent;
-    border-right: 12px solid transparent;
-    border-bottom: 32px solid #3498db;
-    filter: drop-shadow(0 0 2px white);
+    width: 90px;
+    height: 90px;
+    /* Фільтр для кращої видимості на мапі */
+    filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    background: none;
+    border: none;
+}
+
+.arrow-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: #f1c40f; /* Яскраво-жовтий колір як на картинці */
+}
+ .location-arrow-container {
+    background: none !important;
+    border: none !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Додамо тінь для самого зображення всередині, щоб його було видно на супутнику */
+.location-arrow-container img {
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
 }
 
 .dot {
@@ -391,4 +474,27 @@ button {
     left: 1vh;
     width: 50vh;
     height: 50vh;
+}
+
+#rotateModeBtn:active {
+    background: rgba(46, 204, 113, 0.2);
+}
+
+.leaflet-container {
+    transition: transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1) !important;
+}
+
+/* Прибираємо "скачки" при панорамуванні */
+.leaflet-map-pane {
+    transition: transform 0.8s ease-out;
+}
+
+.location-arrow-container {
+    background: none !important;
+    border: none !important;
+}
+
+/* Плавний поворот самої стрілки всередині контейнера */
+.location-arrow-container div {
+    transition: transform 0.4s ease-out;
 }

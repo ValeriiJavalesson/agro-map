@@ -120,8 +120,19 @@
                                 <label>Зсув:</label>
                                 <input type="number" id="startOffset" value="0" step="0.1" onchange="saveLineParams()">
                             </div>
-                        </div>                        
+                            <div class="input-mini-group">
+                                <label>Кут ліній:</label>
+                                <div style="display: flex; gap: 4px;">
+                                    <input type="number" id="manualAngle" value="0" step="0.1"
+                                        onchange="saveLineParams()">
+                                    <button class="degreeBtn" onclick="setAngleFromGPS()" title="Взяти поточний курс">
+                                        📍
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </div>
+
 
                     <div style="display: flex; gap: 8px;">
                         <button onclick="generateLines()" class="btn-primary" style="flex: 2;">Побудувати ☰</button>
@@ -162,8 +173,31 @@
         <button id="trackBtn" onclick="toggleLiveTracking()" disabled class="map-overlay-btn btn-track-map"
             title="Стежити">📍</button>
         <div id="speedometer" class="map-overlay-info">
-            <span id="speedValue">0</span>
+            <!-- 1. Швидкість -->
+            <div style="display: flex; align-items: center;">
+                <span id="speedValue">0</span>
+            </div>
+
+            <!-- 2. ПЕРЕГОРОДКА (між цифрами) -->
+            <div style="width: 1px; height: 4vh; background: #444; margin: 0 12px;"></div>
+
+            <!-- 3. Градуси -->
+            <div class="headingContainer">
+                <span id="headingValue" style="font-size: 4vh; color: #f1c40f; font-weight: bold;">0</span>
+                <sup style="color: #f1c40f; font-size: 2vh; margin-left: 1px; top: -1vh;">°</sup>
+            </div>
+
+            <!-- 4. ПЕРЕГОРОДКА (перед кнопкою) -->
+            <div style="width: 1px; height: 4vh; background: #444; margin: 0 12px;"></div>
+
+            <!-- 5. КНОПКА КЕРУВАННЯ -->
+            <button id="rotateModeBtn" onclick="toggleRotateMode()"
+                style="background: none; border: 1px solid #555; border-radius: 5px; color: white; padding: 4px 8px; cursor: pointer; font-size: 2.5vh; min-width: 5vh;">
+                🧭
+            </button>
         </div>
+
+
     </div>
 
 
