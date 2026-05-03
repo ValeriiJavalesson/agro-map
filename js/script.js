@@ -24,6 +24,10 @@ const colorPicker = document.getElementById('colorPicker');
 
 let isRotateMode = false;
 
+let smoothLat = null;
+let smoothLng = null;
+const SMOOTHING_FACTOR = 0.25;
+
 
 // Константи шарів (карта та супутник)
 // 1. Звичайна карта (OpenStreetMap)
@@ -337,31 +341,67 @@ function showListView() {
     const sidebar = document.getElementById('sidebar');
     sidebar.classList.remove('edit-active');
     sidebar.classList.add('list-active');
-    // 1. Скидаємо змінну в коді
-    activeShapeId = null;
 
-    // 2. ВИДАЛЯЄМО ID зі сховища, щоб при перезавантаженні поле не відкрилося само
+    // 1. Скидаємо навігаційні режими
+    isTrackingActive = false;
+    isRotateMode = false;
+    if (typeof map.setBearing === 'function') {
+        map.setBearing(0);
+    }
+
+    const trackBtn = document.getElementById('trackBtn');
+    if (trackBtn) {
+        trackBtn.classList.remove('active');
+        trackBtn.innerText = "📍";
+    }
+
+    // 2. Скидаємо стан активного поля
+    activeShapeId = null;
     localStorage.removeItem('activeShapeId');
 
     const trackAreaEl = document.getElementById('trackArea');
     if (trackAreaEl) trackAreaEl.innerText = "0.0000 га";
 
-    // 3. Керуємо інтерфейсом
+    // 3. Відображення інтерфейсу
     document.getElementById('view-list').style.display = 'block';
     document.getElementById('view-edit').style.display = 'none';
 
-    // 4. Оновлюємо списки (це заблокує кнопку "Стежити")
     renderShapes();
     updateUI();
 
-    // 5. Очищуємо треки з карти, оскільки поле більше не активне
     if (trackLayer) {
         trackLayer.clearLayers();
     }
-    document.getElementById('view-list').style.display = 'block';
-    document.getElementById('view-edit').style.display = 'none';
-}
 
+    // // 4. АВТОЦЕНТРУВАННЯ (на основі всіх полів)
+    // if (shapes && shapes.length > 0) {
+    //     try {
+    //         let allPoints = [];
+
+    //         // Збираємо ВСІ точки з усіх полів в один масив
+    //         shapes.forEach(shape => {
+    //             if (shape.points && Array.isArray(shape.points)) {
+    //                 shape.points.forEach(p => {
+    //                     if (p.lat && p.lng) {
+    //                         allPoints.push([p.lat, p.lng]);
+    //                     }
+    //                 });
+    //             }
+    //         });
+
+    //         if (allPoints.length > 0) {
+    //             const allBounds = L.latLngBounds(allPoints);
+    //             map.fitBounds(allBounds, {
+    //                 padding: [50, 50],
+    //                 maxZoom: 16, // Щоб не наближало занадто сильно до одного поля
+    //                 animate: true
+    //             });
+    //         }
+    //     } catch (e) {
+    //         console.error("Помилка фокусування на списку полів:", e);
+    //     }
+    // }
+}
 
 function renderShapes() {
     const container = document.getElementById('shapes-list');
@@ -968,6 +1008,26 @@ function generateLines() {
 }
 
 
+// function toggleLiveTracking() {
+//     const trackBtn = document.getElementById('trackBtn');
+//     isTrackingActive = !isTrackingActive;
+
+//     if (isTrackingActive) {
+//         trackBtn.classList.add('active');
+//         trackBtn.innerText = "🛰️";
+
+//         // КЛЮЧОВИЙ МОМЕНТ: Сигналимо, що наступна точка — це новий сегмент
+//         isNewSegmentStarting = true;
+
+//         if (lastLocation) map.panTo([lastLocation.lat, lastLocation.lng]);
+//     } else {
+//         trackBtn.classList.remove('active');
+//         trackBtn.innerText = "📍";
+
+//         // При вимкненні також корисно скинути стан
+//         isNewSegmentStarting = false;
+//     }
+// }
 function toggleLiveTracking() {
     const trackBtn = document.getElementById('trackBtn');
     isTrackingActive = !isTrackingActive;
@@ -976,18 +1036,33 @@ function toggleLiveTracking() {
         trackBtn.classList.add('active');
         trackBtn.innerText = "🛰️";
 
-        // КЛЮЧОВИЙ МОМЕНТ: Сигналимо, що наступна точка — це новий сегмент
-        isNewSegmentStarting = true;
+        // 1. Знаходимо активне поле
+        const activeShape = shapes.find(s => s.id === activeShapeId);
 
-        if (lastLocation) map.panTo([lastLocation.lat, lastLocation.lng]);
+        // 2. Якщо ми в полі і маємо координати, створюємо сегмент з першою точкою відразу
+        if (activeShape && lastLocation) {
+            if (!activeShape.trackSegments) activeShape.trackSegments = [];
+
+            // Додаємо новий сегмент, в якому вже лежить поточна точка
+            activeShape.trackSegments.push([[lastLocation.lat, lastLocation.lng]]);
+
+            // Скидаємо прапорець, бо сегмент вже створено вручну
+            isNewSegmentStarting = false;
+
+            saveData();
+            map.panTo([lastLocation.lat, lastLocation.lng]);
+        } else {
+            // Якщо координат ще немає, просто сигналізуємо про початок
+            isNewSegmentStarting = true;
+        }
+
     } else {
         trackBtn.classList.remove('active');
         trackBtn.innerText = "📍";
-
-        // При вимкненні також корисно скинути стан
         isNewSegmentStarting = false;
     }
 }
+
 
 
 function renderTrack() {
@@ -1222,7 +1297,26 @@ function startGlobalGPS() {
 
     watchId = navigator.geolocation.watchPosition(
         (position) => {
-            const { latitude: lat, longitude: lng, accuracy, heading, speed } = position.coords;
+            // const { latitude: lat, longitude: lng, accuracy, heading, speed } = position.coords;
+
+            const rawLat = position.coords.latitude;
+            const rawLng = position.coords.longitude;
+            const { accuracy, heading, speed } = position.coords;
+
+            // 1. ФІЛЬТРАЦІЯ КООРДИНАТ (Smoothing)
+            if (smoothLat === null || smoothLng === null) {
+                smoothLat = rawLat;
+                smoothLng = rawLng;
+            } else {
+                // Математичне згладжування (Exponential Moving Average)
+                smoothLat = (smoothLat * (1 - SMOOTHING_FACTOR)) + (rawLat * SMOOTHING_FACTOR);
+                smoothLng = (smoothLng * (1 - SMOOTHING_FACTOR)) + (rawLng * SMOOTHING_FACTOR);
+            }
+
+            // Тепер використовуємо відфільтровані координати для всього додатку
+            const lat = smoothLat;
+            const lng = smoothLng;
+
             const currentTimestamp = position.timestamp;
             const speedValue = document.getElementById('speedValue');
 
@@ -1352,8 +1446,8 @@ function startGlobalGPS() {
 
                     if (shouldAdd) {
                         currentSegment.push(newPoint);
-                        renderTrack(); // Малює всі сегменти окремими лініями
                         saveData();
+                        renderTrack(); // Малює всі сегменти окремими лініями                        
                         updateTrackStats();
                     }
 
