@@ -1,7 +1,3 @@
-// Перевірка і створення змінних, якщо вони чомусь не визначені
-if (typeof isTrackingActive === 'undefined') window.isTrackingActive = false;
-if (typeof followModeActive === 'undefined') window.followModeActive = false;
-
 let watchId = null;
 let myLocationMarker = null;
 let lastLocation = null;
