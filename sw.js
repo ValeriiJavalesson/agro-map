@@ -1,8 +1,10 @@
-const CACHE_NAME = 'agro-map-v2.41';
+const CACHE_NAME = 'agro-map-v2.42';
 const ASSETS = [
   '/agro-map/',
   '/agro-map/index.html',
   '/agro-map/styles/style.css',
+  '/agro-map/styles/mobile.css',
+  '/agro-map/styles/compass-mobile.css',
   '/agro-map/js/script.js',
   '/agro-map/manifest.json'
 ];
