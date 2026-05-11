@@ -81,29 +81,35 @@
             <div class="edit-controls">
                 <div class="field-stats-card">
                     <!-- Колір та Назва в один ряд -->
-                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
-                        <div class="color-picker-wrapper">
-                            <input type="color" id="colorPicker" onchange="updateActiveShapeColor(this.value)">
+                    <div>
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <div class="color-picker-wrapper">
+                                <input type="color" id="colorPicker" onchange="updateActiveShapeColor(this.value)">
+                            </div>
+                            <h5 id="editingFieldName">
+                                Назва поля</h5>
                         </div>
-                        <h3 id="editingFieldName"
-                            style="margin: 0; color: white; flex-grow: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
-                            Назва поля</h3>
+                        <div><button id="edit-field-button" onclick="toggleEditField()">✏️</button></div>
                     </div>
 
-                    <div class="stat-row">
-                        <span>Площа:</span>
-                        <b id="area">0.0000 га</b>
-                    </div><div class="stat-row">
-                        <span>По треку:</span>
-                        <b id="trackArea" style="color: #d3a31f;">0.0000 га</b>
+                    <div>
+                        <div class="stat-row">
+                            <span>Площа:</span>
+                            <b id="area">0.0000 га</b>
+                        </div>
+                        <div class="stat-row">
+                            <span>По треку:</span>
+                            <b id="trackArea" style="color: #d3a31f;">0.0000 га</b>
+                        </div>
+                        <div class="stat-row">
+                            <span>Оброблено:</span>
+                            <b id="completedArea" class="highlight">0.0000 га</b>
+                        </div>
                     </div>
-                    <div class="stat-row">
-                        <span>Оброблено:</span>
-                        <b id="completedArea" class="highlight">0.0000 га</b>
-                    </div>
-                    
+
+
                 </div>
-                <div><button id="edit-field-button" onclick="toggleEditField()">✏️</button></div>
+
                 <div class="edit-field hidden">
                     <div class="input-group">
                         <label>Назва поля:</label>
@@ -191,8 +197,7 @@
             <div style="width: 1px; height: 4vh; background: #444; margin: 0 12px;"></div>
 
             <!-- 5. КНОПКА КЕРУВАННЯ -->
-            <button id="rotateModeBtn" onclick="toggleRotateMode()"
-                style="background: none; border: 1px solid #555; border-radius: 5px; color: white; padding: 4px 8px; cursor: pointer; font-size: 2.5vh; min-width: 5vh;">
+            <button id="rotateModeBtn" onclick="toggleRotateMode()">
                 🧭
             </button>
         </div>

@@ -129,13 +129,18 @@ html {
     position: fixed;
     right: auto;
     top: 1vh;
-    left: 50%; /* Центруємо */
-    transform: translateX(-50%); /* Точне вирівнювання по центру */
-    width: auto; /* Дозволяємо ширині підлаштовуватися під контент */
-    min-width: 25%; 
-    padding: 0 20px; /* Відступи всередині */
+    left: 50%;
+    /* Центруємо */
+    transform: translateX(-50%);
+    /* Точне вирівнювання по центру */
+    width: auto;
+    /* Дозволяємо ширині підлаштовуватися під контент */
+    min-width: 25%;
+    padding: 0 20px;
+    /* Відступи всередині */
     height: 7vh;
-    background: rgba(0, 0, 0, 0.85); /* Трохи прозорості для стилю */
+    background: rgba(0, 0, 0, 0.85);
+    /* Трохи прозорості для стилю */
     border: 2px solid #2ecc71;
     border-radius: 12px;
     display: flex;
@@ -150,34 +155,43 @@ html {
     font-weight: bold;
     line-height: 1;
     font-size: 5vh;
-    min-width: 10vh; /* Гарантує місце під цифри */
+    min-width: 10vh;
+    /* Гарантує місце під цифри */
     text-align: right;
 }
 
 /* Додаємо відступ між швидкістю та курсом */
 .map-overlay-info {
-    gap: 15px; /* Створює простір між елементами всередині */
-    width: 30vh !important; 
+    gap: 15px;
+    /* Створює простір між елементами всередині */
+    width: 30vh !important;
     padding: 0 10px;
     box-sizing: border-box;
 }
-.headingContainer{
+
+.headingContainer {
     display: flex;
     align-items: center;
     width: 15vw;
 }
+
 /* Стиль для цифр курсу */
 #headingValue {
-    font-size: 4vh; /* Трохи менше за швидкість, щоб не перевантажувати */
-    color: #f1c40f; /* Жовтий колір, щоб візуально відрізнити від швидкості */
+    font-size: 4vh;
+    /* Трохи менше за швидкість, щоб не перевантажувати */
+    color: #f1c40f;
+    /* Жовтий колір, щоб візуально відрізнити від швидкості */
     font-weight: bold;
 }
+
 .degree-symbol {
     color: #f1c40f;
     font-size: 2.5vh;
     margin-left: 2px;
-    align-self: flex-start; /* Вирівнює символ по верхньому краю контейнера */
-    margin-top: 0.5vh;      /* Тонке налаштування висоти */
+    align-self: flex-start;
+    /* Вирівнює символ по верхньому краю контейнера */
+    margin-top: 0.5vh;
+    /* Тонке налаштування висоти */
 }
 
 /* Одиниця виміру (градуси) */
@@ -191,7 +205,8 @@ html {
 .heading-container {
     display: flex;
     align-items: baseline;
-    border-left: 1px solid #444; /* Тонка лінія-розділювач */
+    border-left: 1px solid #444;
+    /* Тонка лінія-розділювач */
     padding-left: 15px;
 }
 
@@ -280,10 +295,13 @@ html {
     border-left: 4px solid #3498db;
     padding: 0 0 0 8px;
     margin: 0;
+    display: grid;
+    grid-auto-flow: column;
+    gap: 40px;
 }
 
 .edit-active .stat-row {
-    font-size: 2.2vh;
+    font-size: 3.2vh;
     margin-bottom: 2px;
 }
 
@@ -330,8 +348,8 @@ html {
     background: white;
 }
 
-.degreeBtn{
-        background: #f1c40f;
+.degreeBtn {
+    background: #f1c40f;
     border: none;
     border-radius: 4px;
     padding: 0 8px;
@@ -424,7 +442,7 @@ button {
     width: 90px;
     height: 90px;
     /* Фільтр для кращої видимості на мапі */
-    filter: drop-shadow(0 0 2px rgba(0,0,0,0.5));
+    filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.5));
     display: flex;
     justify-content: center;
     align-items: center;
@@ -435,9 +453,11 @@ button {
 .arrow-icon svg {
     width: 100%;
     height: 100%;
-    fill: #f1c40f; /* Яскраво-жовтий колір як на картинці */
+    fill: #f1c40f;
+    /* Яскраво-жовтий колір як на картинці */
 }
- .location-arrow-container {
+
+.location-arrow-container {
     background: none !important;
     border: none !important;
     display: flex;
@@ -450,12 +470,36 @@ button {
     filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.8));
 }
 
+#rotateModeBtn {
+    background: none;
+    /* border: 1px solid rgb(85, 85, 85); */
+    border-radius: 5px;
+    color: white;
+    padding: 4px 8px;
+    cursor: pointer;
+    font-size: 2.5vh;
+    min-width: 5vh;
+    outline-style: none;
+    border: 8px solid #666;
+    /* Базовий сірий колір */
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.gps-excellent { border-color: #2ecc71 !important; box-shadow: 0 0 10px #2ecc71; }
+.gps-good { border-color: #f1c40f !important; box-shadow: 0 0 10px #f1c40f; }
+.gps-bad { border-color: #9c1000 !important; box-shadow: 0 0 10px #9b0f00; }
+
 .dot {
     width: 28px;
     height: 28px;
     border: 3px solid white;
     background: #3498db;
     border-radius: 50%;
+}
+
+.btn-back {
+    display: block;
+    position: absolute;
+    top: -25px;
 }
 
 #edit-field-button {
@@ -474,6 +518,15 @@ button {
     left: 1vh;
     width: 50vh;
     height: 50vh;
+}
+
+#editingFieldName {
+    margin: 0;
+    color: white;
+    flex-grow: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 #rotateModeBtn:active {

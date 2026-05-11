@@ -165,7 +165,7 @@ function resetNorth() {
         if (progress < 1) {
             requestAnimationFrame(animate);
         } else {
-            map.setBearing(0); // Фінальна фіксація в нуль
+            //map.setBearing(0); // Фінальна фіксація в нуль
         }
     }
 
@@ -177,24 +177,33 @@ let rotationRequestIdx = 0;
 function smoothRotate(targetBearing) {
     if (typeof map.setBearing !== 'function') return;
 
-    let startBearing = map.getBearing();
-    // Обчислюємо найкоротший шлях до цілі (щоб не крутитись на 350 градусів)
+    // 1. ОТРИМУЄМО ТА НОРМАЛІЗУЄМО ПОТОЧНИЙ КУТ
+    let rawBearing = map.getBearing();
+    // Перетворюємо будь-яке значення (напр. -10 або 370) у діапазон 0-359
+    let startBearing = (rawBearing % 360 + 360) % 360; 
+
+    // 2. ТАКОЖ НОРМАЛІЗУЄМО ЦІЛЬОВИЙ КУТ (про всяк випадок)
+    targetBearing = (targetBearing % 360 + 360) % 360;
+
+    // 3. ОБЧИСЛЮЄМО НАЙКОРОТШИЙ ШЛЯХ
     let diff = (targetBearing - startBearing + 540) % 360 - 180;
 
-    if (Math.abs(diff) < 0.1) return; // Якщо різниця мізерна — не смикаємо
+    if (Math.abs(diff) < 0.1) return;
 
-    const duration = 600; // Трохи швидше, ніж скидання на північ
+    // Решта вашого коду анімації...
+    const duration = 600;
     const startTime = performance.now();
-    const requestId = ++rotationRequestIdx; // Щоб нові анімації зупиняли старі
+    const requestId = ++rotationRequestIdx;
 
     function animate(currentTime) {
-        if (requestId !== rotationRequestIdx) return; // Зупиняємо, якщо прийшов новий кут
+        if (requestId !== rotationRequestIdx) return;
 
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
         const ease = 1 - Math.pow(1 - progress, 3);
 
-        const currentBearing = startBearing + (diff * ease);
+        // ВАЖЛИВО: додаємо diff до початкового rawBearing, щоб уникнути стрибків у Leaflet
+        const currentBearing = rawBearing + (diff * ease);
         map.setBearing(currentBearing);
 
         if (progress < 1) {
@@ -346,7 +355,7 @@ function showListView() {
     isTrackingActive = false;
     isRotateMode = false;
     if (typeof map.setBearing === 'function') {
-        map.setBearing(0);
+        //map.setBearing(0);
     }
 
     const trackBtn = document.getElementById('trackBtn');
@@ -372,35 +381,6 @@ function showListView() {
     if (trackLayer) {
         trackLayer.clearLayers();
     }
-
-    // // 4. АВТОЦЕНТРУВАННЯ (на основі всіх полів)
-    // if (shapes && shapes.length > 0) {
-    //     try {
-    //         let allPoints = [];
-
-    //         // Збираємо ВСІ точки з усіх полів в один масив
-    //         shapes.forEach(shape => {
-    //             if (shape.points && Array.isArray(shape.points)) {
-    //                 shape.points.forEach(p => {
-    //                     if (p.lat && p.lng) {
-    //                         allPoints.push([p.lat, p.lng]);
-    //                     }
-    //                 });
-    //             }
-    //         });
-
-    //         if (allPoints.length > 0) {
-    //             const allBounds = L.latLngBounds(allPoints);
-    //             map.fitBounds(allBounds, {
-    //                 padding: [50, 50],
-    //                 maxZoom: 16, // Щоб не наближало занадто сильно до одного поля
-    //                 animate: true
-    //             });
-    //         }
-    //     } catch (e) {
-    //         console.error("Помилка фокусування на списку полів:", e);
-    //     }
-    // }
 }
 
 function renderShapes() {
@@ -1007,27 +987,6 @@ function generateLines() {
     }
 }
 
-
-// function toggleLiveTracking() {
-//     const trackBtn = document.getElementById('trackBtn');
-//     isTrackingActive = !isTrackingActive;
-
-//     if (isTrackingActive) {
-//         trackBtn.classList.add('active');
-//         trackBtn.innerText = "🛰️";
-
-//         // КЛЮЧОВИЙ МОМЕНТ: Сигналимо, що наступна точка — це новий сегмент
-//         isNewSegmentStarting = true;
-
-//         if (lastLocation) map.panTo([lastLocation.lat, lastLocation.lng]);
-//     } else {
-//         trackBtn.classList.remove('active');
-//         trackBtn.innerText = "📍";
-
-//         // При вимкненні також корисно скинути стан
-//         isNewSegmentStarting = false;
-//     }
-// }
 function toggleLiveTracking() {
     const trackBtn = document.getElementById('trackBtn');
     isTrackingActive = !isTrackingActive;
@@ -1127,7 +1086,7 @@ function updateCompletedStats() {
 
     const ha = totalCompletedArea / 10000;
     console.log("Разом оброблено га:", ha);
-    statsElem.innerText = ha.toFixed(4);
+    statsElem.innerText = ha.toFixed(4) + " га";
 }
 
 function deleteLines() {
@@ -1302,6 +1261,22 @@ function startGlobalGPS() {
             const rawLat = position.coords.latitude;
             const rawLng = position.coords.longitude;
             const { accuracy, heading, speed } = position.coords;
+            //  const accuracy = position.coords.accuracy; // Отримуємо точність у метрах
+
+            // 1. ОНОВЛЕННЯ ІНДИКАТОРА НА КНОПЦІ
+            const rotateBtn = document.getElementById('rotateModeBtn');
+            if (rotateBtn) {
+                // Скидаємо попередні класи якості
+                rotateBtn.classList.remove('gps-excellent', 'gps-good', 'gps-bad');
+
+                if (accuracy <= 2.5) {
+                    rotateBtn.classList.add('gps-excellent'); // Зелений
+                } else if (accuracy <= 6.0) {
+                    rotateBtn.classList.add('gps-good');      // Жовтий
+                } else {
+                    rotateBtn.classList.add('gps-bad');       // Червоний
+                }
+            }
 
             // 1. ФІЛЬТРАЦІЯ КООРДИНАТ (Smoothing)
             if (smoothLat === null || smoothLng === null) {
@@ -1348,7 +1323,7 @@ function startGlobalGPS() {
                 } window.lastRotation = rotation; // Запам'ятовуємо останній стабільний курс
             }
             // rotation — це ваш вхідний кут
-            let displayDegrees = Math.round((((360 - rotation) % 360) + 360) % 360);
+            let displayDegrees = Math.round((((360 + rotation) % 360) + 360) % 360);
 
 
             // 2. Оновлення цифр у панелі
@@ -1373,7 +1348,7 @@ function startGlobalGPS() {
                 map.panTo([lat, lng], { animate: true, duration: 0.6 });
             } else {
                 // Якщо режим ротації вимкнено — повертаємо карту на Північ (0)
-                smoothRotate(0);
+                // smoothRotate(0);
 
                 // Стрілка крутиться за курсом GPS
                 iconDisplayRotation = finalRotation;
@@ -1605,14 +1580,13 @@ function toggleRotateMode() {
     const btn = document.getElementById('rotateModeBtn');
 
     if (isRotateMode) {
-        btn.style.borderColor = '#2ecc71';
-        btn.style.color = '#2ecc71';
+        // btn.style.borderColor = '#2ecc71';
+        // btn.style.color = '#2ecc71';
         btn.innerText = '🔼'; // Символ "носом вгору"
     } else {
-        btn.style.borderColor = '#555';
-        btn.style.color = 'white';
-        btn.innerText = '🧭';
-        map.setBearing(0); // Повертаємо мапу на Північ при вимкненні
+        // btn.style.borderColor = '#555';
+        // btn.style.color = 'white';
+        btn.innerText = '🧭';        
     }
 }
 
