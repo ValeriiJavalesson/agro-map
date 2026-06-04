@@ -423,11 +423,6 @@ html {
     font-size: 4vh;
 }
 
-.stat-row b {
-    color: #2ecc71 !important;
-    text-shadow: 1px 1px 2px #000;
-}
-
 input {
     border-radius: 12px;
     border: 1px solid #ccc;
