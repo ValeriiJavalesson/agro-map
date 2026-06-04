@@ -399,15 +399,6 @@ html {
     width: 70%;
 }
 
-/* Ховаємо зайве в компактному режимі */
-/* .edit-active #shapeNameInput,
-.edit-active .input-group,
-.edit-active #editingFieldName,
-.edit-active .btn-danger-outline:not(#lockBtn),
-.edit-active .btn-primary:not(.btn-refresh-lines) {
-    display: none !important;
-} */
-
 /* 6. ШРИФТИ ТА КОНТРАСТ */
 #sidebar,
 #sidebar h3,
@@ -429,7 +420,6 @@ input {
     padding: 0px;
 }
 
-/* 7. ТЕХНІЧНІ ФІКСИ */
 button {
     -webkit-tap-highlight-color: transparent;
     cursor: pointer;

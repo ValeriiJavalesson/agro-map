@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agro-map-v2.61';
+const CACHE_NAME = 'agro-map-v2.7';
 const ASSETS = [
   '/agro-map/',
   '/agro-map/index.html',
@@ -37,4 +37,3 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
-
