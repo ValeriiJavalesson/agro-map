@@ -18,20 +18,17 @@
     <meta name="theme-color" content="#1a1a1a">
     <script>
         (function () {
-            // Перевіряємо: тач-екран АБО мобільний браузер
             const isMobile = (
                 ('ontouchstart' in window) ||
                 (navigator.maxTouchPoints > 0) ||
                 /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
             );
-
+            const version = 'v2.5';         
             const link = document.createElement('link');
             link.rel = 'stylesheet';
-            // Якщо телефон — мобільні стилі, якщо ПК — звичайні
-            link.href = isMobile ? 'styles/mobile.css' : 'styles/style.css';
+            const baseStyle = isMobile ? 'styles/mobile.css' : 'styles/style.css';        
+            link.href = `${baseStyle}?v=${version}`;            
             document.head.appendChild(link);
-
-            // Додаємо клас до body, щоб у JS теж можна було перевіряти
             document.documentElement.classList.add(isMobile ? 'is-mobile' : 'is-desktop');
         })();
     </script>
