@@ -376,7 +376,7 @@ function showListView() {
     localStorage.removeItem('activeShapeId');
 
     const trackAreaEl = document.getElementById('trackArea');
-    if (trackAreaEl) trackAreaEl.innerText = "0.0000";
+    if (trackAreaEl) trackAreaEl.innerText = "0.000";
 
     // 3. Відображення інтерфейсу
     document.getElementById('view-list').style.display = 'block';
