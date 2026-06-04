@@ -1,4 +1,4 @@
-const CACHE_NAME = 'agro-map-v2.6';
+const CACHE_NAME = 'agro-map-v2.61';
 const ASSETS = [
   '/agro-map/',
   '/agro-map/index.html',
