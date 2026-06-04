@@ -1,0 +1,16 @@
+@import url('fonts/micro/stylesheet.css');
+
+@font-face {
+    font-family: 'BankGothic';
+    src: url('fonts/bgothm.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+@font-face {
+    font-family: 'Swis';
+    src: url('fonts/swissbo.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}

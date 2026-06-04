@@ -1,4 +1,5 @@
 @import "compass-mobile.css";
+@import url('fonts.css');
 
 
 body,
@@ -301,13 +302,22 @@ html {
 }
 
 .edit-active .stat-row {
-    font-size: 3.2vh;
-    margin-bottom: 2px;
+    font-family: 'BankGothic';
+    font-size: 2.0vh; 
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
 }
 
 .edit-active .stat-row b {
-    font-size: 2.2vh;
+    font-family: 'BankGothic';
+    font-size: 5vh; 
+    font-weight: normal;
+    color: #ccb42e; 
+    letter-spacing: 0.5px; 
+    line-height: 1; 
 }
+
 
 .edit-active .line-settings {
     display: flex !important;
@@ -487,6 +497,7 @@ button {
 .gps-excellent { border-color: #2ecc71 !important; box-shadow: 0 0 10px #2ecc71; }
 .gps-good { border-color: #f1c40f !important; box-shadow: 0 0 10px #f1c40f; }
 .gps-bad { border-color: #9c1000 !important; box-shadow: 0 0 10px #9b0f00; }
+.gps-vbad { border-color: #63009c !important; box-shadow: 0 0 10px #63009c; }
 
 .dot {
     width: 28px;

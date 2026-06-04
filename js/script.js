@@ -28,6 +28,9 @@ let smoothLat = null;
 let smoothLng = null;
 const SMOOTHING_FACTOR = 0.25;
 
+let currentAnimateBearing = 0;
+let rotationRequestIdx = 0;
+
 
 // Константи шарів (карта та супутник)
 // 1. Звичайна карта (OpenStreetMap)
@@ -172,44 +175,48 @@ function resetNorth() {
     requestAnimationFrame(animate);
 }
 
-let currentAnimateBearing = 0;
-let rotationRequestIdx = 0;
+
 function smoothRotate(targetBearing) {
     if (typeof map.setBearing !== 'function') return;
 
-    // 1. ОТРИМУЄМО ТА НОРМАЛІЗУЄМО ПОТОЧНИЙ КУТ
-    let rawBearing = map.getBearing();
-    // Перетворюємо будь-яке значення (напр. -10 або 370) у діапазон 0-359
-    let startBearing = (rawBearing % 360 + 360) % 360; 
+    // 1. Отримуємо та нормалізуємо поточний кут карти строго в 0-359°
+    const rawBearing = map.getBearing();
+    const startBearing = (rawBearing % 360 + 360) % 360;
 
-    // 2. ТАКОЖ НОРМАЛІЗУЄМО ЦІЛЬОВИЙ КУТ (про всяк випадок)
+    // 2. Нормалізуємо цільовий кут у 0-359°
     targetBearing = (targetBearing % 360 + 360) % 360;
 
-    // 3. ОБЧИСЛЮЄМО НАЙКОРОТШИЙ ШЛЯХ
+    // 3. Обчислюємо найкоротший шлях (-180° до +180°)
     let diff = (targetBearing - startBearing + 540) % 360 - 180;
 
+    // Якщо зміна мізерна — ігноруємо, щоб не навантажувати процесор
     if (Math.abs(diff) < 0.1) return;
 
-    // Решта вашого коду анімації...
-    const duration = 600;
+    const duration = 600; // Час анімації в мс
     const startTime = performance.now();
     const requestId = ++rotationRequestIdx;
 
     function animate(currentTime) {
+        // Якщо за цей час прийшов новий GPS-кут — скасовуємо поточну застарілу анімацію
         if (requestId !== rotationRequestIdx) return;
 
         const elapsed = currentTime - startTime;
         const progress = Math.min(elapsed / duration, 1);
+
+        // Плавне уповільнення (Cubic Ease-Out)
         const ease = 1 - Math.pow(1 - progress, 3);
 
-        // ВАЖЛИВО: додаємо diff до початкового rawBearing, щоб уникнути стрибків у Leaflet
-        const currentBearing = rawBearing + (diff * ease);
-        map.setBearing(currentBearing);
+        // 🌟 ВИПРАВЛЕННЯ: Базою для кроку анімації є чистий startBearing, а не накопичений rawBearing
+        const nextBearing = startBearing + (diff * ease);
+
+        // Передаємо фінальний кут у Leaflet (завжди в межах 0-360 за рахунок нормалізації на кожному кроці)
+        map.setBearing((nextBearing % 360 + 360) % 360);
 
         if (progress < 1) {
             requestAnimationFrame(animate);
         }
     }
+
     requestAnimationFrame(animate);
 }
 
@@ -369,7 +376,7 @@ function showListView() {
     localStorage.removeItem('activeShapeId');
 
     const trackAreaEl = document.getElementById('trackArea');
-    if (trackAreaEl) trackAreaEl.innerText = "0.0000 га";
+    if (trackAreaEl) trackAreaEl.innerText = "0.0000";
 
     // 3. Відображення інтерфейсу
     document.getElementById('view-list').style.display = 'block';
@@ -423,7 +430,25 @@ function renderShapes() {
         btn.onclick = () => {
             activeShapeId = shape.id; // Встановлюємо ID
             const trackAreaEl = document.getElementById('trackArea');
-            if (trackAreaEl) trackAreaEl.innerText = "0.0000 га";
+            if (trackAreaEl) trackAreaEl.innerText = "0.0000";
+
+            // 🌟 ОНОВЛЕННЯ ІНПУТІВ НАВІГАЦІЇ З ДАНИХ ПОЛЯ
+            const manualAngleInput = document.getElementById('manualAngle');
+            const lineSpacingInput = document.getElementById('lineSpacing');
+            const startOffsetInput = document.getElementById('startOffset');
+
+            if (shape.liningSettings) {
+                // Якщо поле вже має збережені налаштування колій
+                if (manualAngleInput) manualAngleInput.value = shape.liningSettings.angle ?? 0;
+                if (lineSpacingInput) lineSpacingInput.value = shape.liningSettings.spacing ?? 10;
+                if (startOffsetInput) startOffsetInput.value = shape.liningSettings.offset ?? 0;
+            } else {
+                // Дефолтні параметри для нового поля
+                if (manualAngleInput) manualAngleInput.value = 0;
+                if (lineSpacingInput) lineSpacingInput.value = 10;
+                if (startOffsetInput) startOffsetInput.value = 0;
+            }
+
             // 1. Оновлюємо візуальний стан списку та кнопки "Стежити"
             renderShapes();
 
@@ -446,6 +471,7 @@ function renderShapes() {
             renderTrack();
             if (typeof focusOnShape === 'function') focusOnShape();
         };
+
 
         container.appendChild(btn);
     });
@@ -537,7 +563,7 @@ function updateUI() {
 
             shape.internalStrips.forEach((stripData, index) => {
                 const stripId = `strip-${shape.id}-${index}`; // Унікальний ID для кожної смуги
-                const isCompleted = shape.completedStrips[index]; // Чи була вона клікнута раніше
+                const isCompleted = shape.completedStrips && shape.completedStrips[index]; // Безпечна перевірка
 
                 const stripLayer = L.geoJSON(turf.polygon(stripData), {
                     style: {
@@ -550,8 +576,11 @@ function updateUI() {
                     onEachFeature: (feature, layer) => {
                         layer.isStrip = true;
                         layer.stripIndex = index;
+                        // 🌟 КРОК 1: Записуємо ID поля в сам шар Leaflet, щоб розрізняти смуги сусідніх полів
+                        layer.belongsToShapeId = shape.id;
+
                         const stripHa = turf.area(feature) / 10000;
-                        const tooltipText = `Смуга №${index + 1}: ${stripHa.toFixed(4)} га`;
+                        const tooltipText = `Смуга №${index + 1}: ${stripHa.toFixed(3)}`;
 
                         layer.on('mouseover', function (e) {
                             // --- ПЕРЕВІРКА ---
@@ -563,9 +592,11 @@ function updateUI() {
                                 direction: 'top'
                             }).openTooltip();
 
-                            // 2. СКИДАННЯ СТИЛІВ ІНШИХ СМУГ (ваш існуючий код)
+                            // 2. СКИДАННЯ СТИЛІВ ІНШИХ СМУГ
                             map.eachLayer(l => {
-                                if (l.isStrip && l.options) {
+                                // 🌟 КРОК 2: Модифікуємо умову. Скидаємо стилі лише для смуг, 
+                                // які належать САМЕ ЦЬОМУ активному полю (shape.id)
+                                if (l.isStrip && l.options && l.belongsToShapeId === shape.id) {
                                     const lIndex = l.stripIndex;
                                     const lCompleted = shape.completedStrips && shape.completedStrips[lIndex];
                                     if (l !== this) {
@@ -591,7 +622,7 @@ function updateUI() {
                             // --- ПЕРЕВІРКА ---
                             if (shape.id !== activeShapeId) return;
 
-                            // ЗАКРИВАЄМО ТА ВІДВ'ЯЗУЄМО ПІДКАЗКУ (щоб не лишалася на неактивних полях)
+                            // ЗАКРИВАЄМО ТА ВІДВ'ЯЗУЄМО ПІДКАЗКУ
                             this.closeTooltip();
                             this.unbindTooltip();
 
@@ -607,7 +638,6 @@ function updateUI() {
                             L.DomEvent.stopPropagation(e);
 
                             // --- ДОДАЄМО ПЕРЕВІРКУ ---
-                            // Якщо це поле не є активним, ми забороняємо ручне відмічання смуг
                             if (shape.id !== activeShapeId) {
                                 console.warn("Ці колії належать іншому полю. Спочатку виберіть його у списку.");
                                 return;
@@ -630,22 +660,16 @@ function updateUI() {
                                 fillColor: isNowCompleted ? '#2ecc71' : shape.color,
                                 fillOpacity: isNowCompleted ? 0.6 : 0.15,
                                 weight: isNowCompleted ? 2 : 1,
-                                dashArray: isNowCompleted ? '' : '5, 5' // Смуга стає суцільною, якщо виконана
+                                dashArray: isNowCompleted ? '' : '5, 5'
                             });
 
                             updateCompletedStats();
                             saveData();
                         });
-
                     }
-
                 }).addTo(map);
             });
         }
-
-
-
-
         // --- БЛОК РЕДАГУВАННЯ ТОЧОК ---
         // Маркери додаємо лише якщо площа вибрана ТА НЕ заблокована
         if (isSelected && !shape.isLocked) {
@@ -774,13 +798,13 @@ function calculateArea(shape) {
             const areaSqm = turf.area(polygonFeature);
             const hectares = areaSqm / 10000;
 
-            areaDisplay.innerText = hectares.toFixed(4) + " га";
+            areaDisplay.innerText = hectares.toFixed(3);
         } catch (e) {
             console.error("Помилка розрахунку:", e);
-            areaDisplay.innerText = "0.0000 га";
+            areaDisplay.innerText = "0.0000";
         }
     } else {
-        areaDisplay.innerText = "0.0000 га";
+        areaDisplay.innerText = "0.0000";
     }
 }
 
@@ -788,17 +812,25 @@ function calculateArea(shape) {
 
 function saveData() {
     try {
-        // 1. Оптимізація координат перед збереженням (зменшуємо розмір JSON у 2-3 рази)
+        // 1. Оптимізація координат перед збереженням
         const optimizedShapes = shapes.map(shape => {
             const newShape = { ...shape };
+
+            // Оптимізація GPS треків техніки
             if (newShape.trackSegments) {
                 newShape.trackSegments = newShape.trackSegments.map(segment =>
                     segment.map(point => [
-                        Math.round(point[0] * 1000000) / 1000000, // 6 знаків після коми
+                        Math.round(point[0] * 1000000) / 1000000,
                         Math.round(point[1] * 1000000) / 1000000
                     ])
                 );
             }
+
+            // 🌟 Переносимо налаштування колій (вони вже округлені в generateLines)
+            if (shape.liningSettings) {
+                newShape.liningSettings = { ...shape.liningSettings };
+            }
+
             return newShape;
         });
 
@@ -816,12 +848,12 @@ function saveData() {
     } catch (e) {
         console.error("Помилка збереження:", e);
 
-        // Показуємо алерт тільки якщо це дійсно переповнення квоти
         if (e.name === 'QuotaExceededError' || e.code === 22) {
             alert("Пам'ять LocalStorage переповнена! Видаліть старі треки або зменште кількість полів.");
         }
     }
 }
+
 
 
 
@@ -925,39 +957,41 @@ function generateLines() {
     const shape = shapes.find(s => s.id === activeShapeId);
     if (!shape || !shape.points || shape.points.length < 3) return;
 
-    // Отримуємо кут з інтерфейсу (додайте input id="manualAngle")
+    // Отримуємо кут з інтерфейсу
     const manualAngle = parseFloat(document.getElementById('manualAngle').value) || 0;
     const spacingMeters = parseFloat(document.getElementById('lineSpacing').value) || 10;
     const manualShift = parseFloat(document.getElementById('startOffset').value) || 0;
+
+    // 🌟 ЗБЕРЕЖЕННЯ НАЛАШТУВАНЬ У СТРУКТУРУ ПОЛЯ
+    shape.liningSettings = {
+        angle: Math.round(manualAngle * 10) / 10,       // Округлюємо до 1 знака
+        spacing: Math.round(spacingMeters * 100) / 100, // Округлюємо до 2 знаків (сантиметри)
+        offset: Math.round(manualShift * 100) / 100
+    };
 
     try {
         const coords = shape.points.map(p => [p.lng, p.lat]);
         const closedCoords = [...coords, coords[0]];
         const poly = turf.polygon([closedCoords]);
         const bbox = turf.bbox(poly);
-        const center = turf.center(poly); // Центр поля — точка опори
+        const center = turf.center(poly);
 
-        // Діагональ для гарантованого покриття при будь-якому куті
         const diag = turf.distance(
             turf.point([bbox[0], bbox[1]]),
             turf.point([bbox[2], bbox[3]]),
             { units: 'meters' }
         ) * 2;
 
-        const bearing = manualAngle; // Використовуємо заданий кут
+        const bearing = manualAngle;
         let lines = [];
 
-        // Функція створення лінії відносно центру
         function getRawLine(offset) {
-            // Зміщуємося від центру перпендикулярно курсу (bearing + 90)
             const origin = turf.destination(center, offset, bearing + 90, { units: 'meters' });
-            // Малюємо лінію вперед і назад по курсу
             const start = turf.destination(origin, -diag, bearing, { units: 'meters' });
             const end = turf.destination(origin, diag, bearing, { units: 'meters' });
             return [start.geometry.coordinates, end.geometry.coordinates];
         }
 
-        // Генеруємо лінії в обидва боки від центру, щоб покрити весь BBox
         const halfCount = Math.ceil(diag / spacingMeters);
         for (let i = -halfCount; i <= halfCount; i++) {
             const offset = (i * spacingMeters) + manualShift;
@@ -979,13 +1013,24 @@ function generateLines() {
             } catch (e) { continue; }
         }
 
-        shape.internalStrips = strips;
+        // Оптимізація координат самих сегментів (колій) перед записом
+        // Округлюємо до 6 знаків для економії місця в LocalStorage
+        shape.internalStrips = strips.map(polygon =>
+            polygon.map(ring =>
+                ring.map(point => [
+                    Math.round(point[0] * 1000000) / 1000000,
+                    Math.round(point[1] * 1000000) / 1000000
+                ])
+            )
+        );
+
         saveData();
         updateUI();
     } catch (error) {
         console.error("Помилка генерації:", error);
     }
 }
+
 
 function toggleLiveTracking() {
     const trackBtn = document.getElementById('trackBtn');
@@ -998,7 +1043,25 @@ function toggleLiveTracking() {
         // 1. Знаходимо активне поле
         const activeShape = shapes.find(s => s.id === activeShapeId);
 
-        // 2. Якщо ми в полі і маємо координати, створюємо сегмент з першою точкою відразу
+        // 🌟 2. ІНІЦІАЛІЗАЦІЯ ПРОГРЕСУ СМУГ ДЛЯ ЗАМАЛЬОВУВАННЯ
+        sessionProgress = {};
+        if (activeShape && activeShape.internalStrips) {
+            activeShape.internalStrips.forEach((stripCoords, index) => {
+                // Пропускаємо смуги, які вже були повністю оброблені раніше
+                if (activeShape.completedStrips && activeShape.completedStrips[index]) return;
+
+                // Наперед генеруємо контрольні точки для кожної смуги
+                if (typeof getControlPoints === 'function') {
+                    sessionProgress[index] = {
+                        points: getControlPoints(stripCoords),
+                        hitCount: 0,
+                        hits: new Array(10).fill(false)
+                    };
+                }
+            });
+        }
+
+        // 3. Якщо ми в полі і маємо координати, створюємо сегмент з першою точкою відразу
         if (activeShape && lastLocation) {
             if (!activeShape.trackSegments) activeShape.trackSegments = [];
 
@@ -1010,6 +1073,9 @@ function toggleLiveTracking() {
 
             saveData();
             map.panTo([lastLocation.lat, lastLocation.lng]);
+
+            // Оновлюємо відображення треку відразу, щоб перша точка з'явилася на карті
+            if (typeof renderTrack === 'function') renderTrack();
         } else {
             // Якщо координат ще немає, просто сигналізуємо про початок
             isNewSegmentStarting = true;
@@ -1019,8 +1085,12 @@ function toggleLiveTracking() {
         trackBtn.classList.remove('active');
         trackBtn.innerText = "📍";
         isNewSegmentStarting = false;
+
+        // Очищаємо прогрес сесії при вимкненні, щоб не накопичувати сміття в пам'яті
+        sessionProgress = {};
     }
 }
+
 
 
 
@@ -1086,7 +1156,7 @@ function updateCompletedStats() {
 
     const ha = totalCompletedArea / 10000;
     console.log("Разом оброблено га:", ha);
-    statsElem.innerText = ha.toFixed(4) + " га";
+    statsElem.innerText = ha.toFixed(3);
 }
 
 function deleteLines() {
@@ -1269,12 +1339,14 @@ function startGlobalGPS() {
                 // Скидаємо попередні класи якості
                 rotateBtn.classList.remove('gps-excellent', 'gps-good', 'gps-bad');
 
-                if (accuracy <= 2.5) {
+                if (accuracy <= 1.0) {
                     rotateBtn.classList.add('gps-excellent'); // Зелений
-                } else if (accuracy <= 6.0) {
+                } else if (accuracy <= 2.5) {
                     rotateBtn.classList.add('gps-good');      // Жовтий
+                } else if (accuracy <= 6.0) {
+                    rotateBtn.classList.add('gps-bad');      // Червоний
                 } else {
-                    rotateBtn.classList.add('gps-bad');       // Червоний
+                    rotateBtn.classList.add('gps-vbad');       // Фіолетовий
                 }
             }
 
@@ -1397,10 +1469,9 @@ function startGlobalGPS() {
                     // 2. Створення нового сегмента при старті стеження
                     if (isNewSegmentStarting || activeShape.trackSegments.length === 0) {
                         activeShape.trackSegments.push([]);
-                        isNewSegmentStarting = false; // Важливо: скидаємо прапорець
+                        isNewSegmentStarting = false;
                     }
 
-                    // Отримуємо посилання на поточний (останній) сегмент
                     const currentSegments = activeShape.trackSegments;
                     const currentSegment = currentSegments[currentSegments.length - 1];
                     const newPoint = [lat, lng];
@@ -1411,7 +1482,6 @@ function startGlobalGPS() {
                         shouldAdd = true;
                     } else {
                         const lastP = currentSegment[currentSegment.length - 1];
-                        // Turf очікує [lng, lat], тому беремо індекси [1] та [0]
                         const from = turf.point([lastP[1], lastP[0]]);
                         const to = turf.point([lng, lat]);
                         const dist = turf.distance(from, to, { units: 'meters' });
@@ -1422,7 +1492,7 @@ function startGlobalGPS() {
                     if (shouldAdd) {
                         currentSegment.push(newPoint);
                         saveData();
-                        renderTrack(); // Малює всі сегменти окремими лініями                        
+                        renderTrack();
                         updateTrackStats();
                     }
 
@@ -1434,15 +1504,11 @@ function startGlobalGPS() {
                         activeShape.internalStrips.forEach((stripCoords, index) => {
                             if (activeShape.completedStrips && activeShape.completedStrips[index]) return;
 
-                            if (!sessionProgress[index]) {
-                                sessionProgress[index] = {
-                                    points: getControlPoints(stripCoords),
-                                    hitCount: 0,
-                                    hits: new Array(10).fill(false)
-                                };
-                            }
-
+                            // 🌟 ВИПРАВЛЕННЯ: Блок `if (!sessionProgress[index])` видалено!
+                            // Дані тепер беруться миттєво з наперед створеного об'єкта
                             const data = sessionProgress[index];
+                            if (!data) return; // Страховка, якщо смуга вже замальована
+
                             data.points.forEach((cp, i) => {
                                 if (!data.hits[i]) {
                                     const dist = turf.distance(myPos, turf.point(cp), { units: 'meters' });
@@ -1458,6 +1524,7 @@ function startGlobalGPS() {
                                 activeShape.completedStrips[index] = true;
                                 delete sessionProgress[index];
 
+                                // Перераховуємо площу та оновлюємо карту миттєво
                                 if (typeof updateUI === 'function') updateUI();
                                 if (typeof updateCompletedStats === 'function') updateCompletedStats();
                                 saveData();
@@ -1465,9 +1532,9 @@ function startGlobalGPS() {
                         });
                     }
                 }
-                // Плавно переміщуємо камеру за маркером
                 map.panTo([lat, lng]);
             }
+
 
 
 
@@ -1500,73 +1567,84 @@ function getControlPoints(stripCoords) {
 }
 
 function updateTrackStats() {
-    if (trackCalcTimeout) clearTimeout(trackCalcTimeout);
+    const activeShape = shapes.find(s => s.id === activeShapeId);
+    const trackAreaEl = document.getElementById('trackArea'); // Ваше поле виведення площі треку
+    
+    if (!activeShape || !trackAreaEl) return;
+    if (!activeShape.trackSegments || activeShape.trackSegments.length === 0) {
+        trackAreaEl.innerText = "0.0000";
+        return;
+    }
 
-    trackCalcTimeout = setTimeout(() => {
-        const activeShape = shapes.find(s => s.id === activeShapeId);
-        const trackAreaEl = document.getElementById('trackArea');
+    // Отримуємо ширину захвату агрегата (в метрах)
+    const trackWidthMeters = parseFloat(document.getElementById('lineSpacing').value) || 10;
+    const radiusMeters = trackWidthMeters / 2; // Радіус буфера — це половина ширини захвату
 
-        if (!activeShape || !activeShape.trackSegments || activeShape.trackSegments.length === 0) {
-            if (trackAreaEl) trackAreaEl.innerText = "0.0000 га";
-            return;
+    let combinedFeatures = [];
+
+    // Перебираємо всі сегменти треку (відрізки між увімкненнями/вимкненнями кнопки)
+    activeShape.trackSegments.forEach(segment => {
+        if (!segment || segment.length === 0) return;
+
+        // Перетворюємо координати з [lat, lng] у потрібний для Turf формат [lng, lat]
+        const turfCoords = segment.map(p => [p[1], p[0]]);
+
+        if (turfCoords.length === 1) {
+            // 🌟 ВИПРАВЛЕННЯ БАГУ: Якщо в сегменті лише 1 точка (старт запису)
+            // Створюємо буфер навколо ТОЧКИ (круг), щоб площа не була нульовою
+            try {
+                const pointF = turf.point(turfCoords[0]);
+                const pointBuffer = turf.buffer(pointF, radiusMeters, { units: 'meters' });
+                if (pointBuffer) combinedFeatures.push(pointBuffer);
+            } catch (e) {
+                console.error("Помилка створення буфера точки:", e);
+            }
+        } else if (turfCoords.length >= 2) {
+            // Якщо точок дві або більше — будуємо буфер навколо ЛІНІЇ
+            try {
+                const lineF = turf.lineString(turfCoords);
+                const lineBuffer = turf.buffer(lineF, radiusMeters, { units: 'meters' });
+                if (lineBuffer) combinedFeatures.push(lineBuffer);
+            } catch (e) {
+                console.error("Помилка створення буфера лінії:", e);
+            }
+        }
+    });
+
+    // Якщо не вдалося побудувати жодного буфера
+    if (combinedFeatures.length === 0) {
+        trackAreaEl.innerText = "0.0000";
+        return;
+    }
+
+    try {
+        let finalPoly = combinedFeatures[0];
+
+        // Якщо сегментів декілька, об'єднуємо їх через turf.union, щоб уникнути подвійного рахунку на перекриттях
+        for (let i = 1; i < combinedFeatures.length; i++) {
+            const unionResult = turf.union(turf.featureCollection([finalPoly, combinedFeatures[i]]));
+            if (unionResult) {
+                finalPoly = unionResult;
+            }
         }
 
-        try {
-            const trackWidth = parseFloat(document.getElementById('lineSpacing').value) || 10;
+        // Рахуємо фінальну чисту площу обробки в квадратних метрах
+        const areaM2 = turf.area(finalPoly);
+        
+        // Переводимо в гектари (ділимо на 10 000)
+        const areaHa = areaM2 / 10000;
 
-            // 1. Отримуємо координати з вашого масиву 'points'
-            if (!activeShape.points || activeShape.points.length < 3) {
-                console.error("Недостатньо точок у полі для розрахунку");
-                return;
-            }
+        // Записуємо площу в об'єкт поля, щоб вона не губилася при виході/вході
+        activeShape.calculatedTrackArea = areaHa;
 
-            // Перетворюємо {lat, lng} у [lng, lat]
-            let coords = activeShape.points.map(p => [p.lng, p.lat]);
+        // Виводимо в інтерфейс
+        trackAreaEl.innerText = `${areaHa.toFixed(3)}`;
 
-            // 2. Важливо: Turf вимагає, щоб перша і остання точки збігалися
-            if (coords[0][0] !== coords[coords.length - 1][0] || coords[0][1] !== coords[coords.length - 1][1]) {
-                coords.push([coords[0][0], coords[0][1]]);
-            }
-
-            // Створюємо полігон (масив має бути загорнутий у ще один масив)
-            const fieldPoly = turf.polygon([coords]);
-
-            let features = [];
-
-            // 3. Обробляємо треки
-            activeShape.trackSegments.forEach(segment => {
-                if (segment.length < 2) return;
-
-                // Перевертаємо точки треку [lat, lng] -> [lng, lat]
-                const lineCoords = segment.map(p => [p[1], p[0]]);
-                let line = turf.lineString(lineCoords);
-
-                // Спрощуємо для швидкості
-                line = turf.simplify(line, { tolerance: 0.00001, highQuality: false });
-
-                const buffer = turf.buffer(line, trackWidth / 2, { units: 'meters' });
-                if (buffer) features.push(buffer);
-            });
-
-            if (features.length === 0) return;
-
-            // 4. Об'єднуємо треки та шукаємо перетин із полем
-            const combinedTrack = turf.union(turf.featureCollection(features));
-            if (!combinedTrack) return;
-
-            const intersection = turf.intersect(turf.featureCollection([combinedTrack, fieldPoly]));
-
-            if (intersection) {
-                const areaHa = turf.area(intersection) / 10000;
-                trackAreaEl.innerText = areaHa.toFixed(4) + " га";
-            } else {
-                trackAreaEl.innerText = "0.0000 га";
-            }
-        } catch (e) {
-            console.warn("Помилка обробки геометрії:", e.message);
-        }
-    }, 1000);
+    } catch (error) {
+        console.error("Помилка об'єднання полігонів треку:", error);
+    }
 }
+
 
 function toggleEditField() {
     const editField = document.getElementsByClassName('edit-field')[0];
@@ -1586,7 +1664,7 @@ function toggleRotateMode() {
     } else {
         // btn.style.borderColor = '#555';
         // btn.style.color = 'white';
-        btn.innerText = '🧭';        
+        btn.innerText = '🧭';
     }
 }
 

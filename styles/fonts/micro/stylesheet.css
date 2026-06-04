@@ -1,0 +1,13 @@
+@font-face {
+    font-family: 'Micro 5';
+    src: url('Micro5-Regular.eot');
+    src: local('Micro 5 Regular'), local('Micro5-Regular'),
+        url('Micro5-Regular.eot?#iefix') format('embedded-opentype'),
+        url('Micro5-Regular.woff2') format('woff2'),
+        url('Micro5-Regular.woff') format('woff'),
+        url('Micro5-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
