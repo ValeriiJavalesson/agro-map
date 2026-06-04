@@ -430,7 +430,7 @@ function renderShapes() {
         btn.onclick = () => {
             activeShapeId = shape.id; // Встановлюємо ID
             const trackAreaEl = document.getElementById('trackArea');
-            if (trackAreaEl) trackAreaEl.innerText = "0.0000";
+            if (trackAreaEl) trackAreaEl.innerText = "0.000";
 
             // 🌟 ОНОВЛЕННЯ ІНПУТІВ НАВІГАЦІЇ З ДАНИХ ПОЛЯ
             const manualAngleInput = document.getElementById('manualAngle');
@@ -801,10 +801,10 @@ function calculateArea(shape) {
             areaDisplay.innerText = hectares.toFixed(3);
         } catch (e) {
             console.error("Помилка розрахунку:", e);
-            areaDisplay.innerText = "0.0000";
+            areaDisplay.innerText = "0.000";
         }
     } else {
-        areaDisplay.innerText = "0.0000";
+        areaDisplay.innerText = "0.000";
     }
 }
 
@@ -1572,7 +1572,7 @@ function updateTrackStats() {
     
     if (!activeShape || !trackAreaEl) return;
     if (!activeShape.trackSegments || activeShape.trackSegments.length === 0) {
-        trackAreaEl.innerText = "0.0000";
+        trackAreaEl.innerText = "0.000";
         return;
     }
 
@@ -1613,7 +1613,7 @@ function updateTrackStats() {
 
     // Якщо не вдалося побудувати жодного буфера
     if (combinedFeatures.length === 0) {
-        trackAreaEl.innerText = "0.0000";
+        trackAreaEl.innerText = "0.000";
         return;
     }
 
