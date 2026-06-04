@@ -10,13 +10,26 @@ const ASSETS = [
   '/agro-map/js/mobile-script.js',
   '/agro-map/manifest.json'
 ];
-
 self.addEventListener('install', (e) => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(ASSETS))
+      .then(() => self.skipWaiting()) // Активує SW відразу
   );
 });
-
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cache) => {          
+          if (cache !== CACHE_NAME) {
+            return caches.delete(cache);
+          }
+        })
+      );
+    }).then(() => self.clients.claim()) 
+  );
+});
 self.addEventListener('fetch', (e) => {
   e.respondWith(
     caches.match(e.request).then((response) => {
@@ -24,3 +37,4 @@ self.addEventListener('fetch', (e) => {
     })
   );
 });
+
